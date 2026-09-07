@@ -1,0 +1,968 @@
+{
+ "info": {
+  "_postman_id": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+  "name": "Onos Express",
+  "description": "<html><head></head><body><p>OnosExpress API Documentation</p>\n</body></html>",
+  "schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+  "toc": [],
+  "owner": "16307748",
+  "collectionId": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+  "publishedId": "2s8YzMXQvd",
+  "public": true,
+  "customColor": {
+   "top-bar": "FFFFFF",
+   "right-sidebar": "303030",
+   "highlight": "FF6C37"
+  },
+  "publishDate": "2026-05-29T02:14:35.000Z"
+ },
+ "item": [
+  {
+   "name": "AUTHORIZATION",
+   "item": [
+    {
+     "name": "Login",
+     "id": "deeb40e8-ad89-482c-a11b-e05c7941380b",
+     "protocolProfileBehavior": {
+      "disableBodyPruning": true
+     },
+     "request": {
+      "method": "POST",
+      "header": [],
+      "body": {
+       "mode": "urlencoded",
+       "urlencoded": [
+        {
+         "key": "email",
+         "value": "",
+         "type": "text"
+        },
+        {
+         "key": "password",
+         "value": "",
+         "type": "text",
+         "disabled": true
+        }
+       ]
+      },
+      "url": "https://api-app.onosexpress.com/api/v1/login",
+      "description": "<p>Authenticates a user and retrieves an access token for use in subsequent API requests.</p>\n<p><strong>Method:</strong> <code>POST</code><br /><strong>Endpoint:</strong> <code>https://api-app.onosexpress.com/api/v1/login</code></p>\n<h3 id=\"request-body-url-encoded\">Request Body (URL-encoded)</h3>\n<div class=\"click-to-expand-wrapper is-table-wrapper\"><table>\n<thead>\n<tr>\n<th>Field</th>\n<th>Value</th>\n<th>Description</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><code>email</code></td>\n<td><code></code></td>\n<td>The registered email of the user.</td>\n</tr>\n<tr>\n<td><code>password</code></td>\n<td><code></code></td>\n<td>The user's account password.</td>\n</tr>\n</tbody>\n</table>\n</div><h3 id=\"responses\">Responses</h3>\n<ul>\n<li><strong>Success</strong> — Returns a valid access token upon successful authentication.</li>\n<li><strong>Error</strong> — Returns an error response (e.g., <code>401 Invalid login info</code>) when the credentials are incorrect or missing.</li>\n</ul>\n<h3 id=\"notes\">Notes</h3>\n<ul>\n<li>The <code>password</code> field is currently disabled in the request body. Enable it before sending if needed.</li>\n<li>The <code></code> and <code>https://api-app.onosexpress.com/api/v1</code> values are sourced from the active environment (<code>ONOSEXPRESS_PRO</code>).</li>\n</ul>\n",
+      "auth": {
+       "type": "bearer",
+       "bearer": {
+        "basicConfig": []
+       },
+       "isInherited": true,
+       "source": {
+        "_postman_id": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+        "id": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+        "name": "Onos Express",
+        "type": "collection"
+       }
+      },
+      "urlObject": {
+       "path": [
+        "login"
+       ],
+       "host": [
+        "https://api-app.onosexpress.com/api/v1"
+       ],
+       "query": [],
+       "variable": []
+      }
+     },
+     "response": [
+      {
+       "id": "4544ce04-a2ed-4d52-b0c3-4964b6dc63bd",
+       "name": "Success",
+       "originalRequest": {
+        "method": "POST",
+        "header": [],
+        "body": {
+         "mode": "urlencoded",
+         "urlencoded": [
+          {
+           "key": "email",
+           "value": "",
+           "type": "text"
+          },
+          {
+           "key": "password",
+           "value": "",
+           "type": "text"
+          }
+         ]
+        },
+        "url": "https://api-app.onosexpress.com/api/v1/login"
+       },
+       "status": "OK",
+       "code": 200,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Length",
+         "value": "288"
+        },
+        {
+         "key": "Content-Type",
+         "value": "application/json; charset=utf-8"
+        },
+        {
+         "key": "Date",
+         "value": "Wed, 22 May 2024 03:07:22 GMT"
+        },
+        {
+         "key": "Set-Cookie",
+         "value": "_uid=664d610498454b7cefd62e7e; path=/; httponly"
+        },
+        {
+         "key": "Vary",
+         "value": "Origin"
+        }
+       ],
+       "cookie": [],
+       "responseTime": null,
+       "body": "{\n    \"code\": 200,\n    \"data\": {\n        \"access_token\": \"\",\n        \"address\": {\n            \"first_name\": \"\",\n            \"address_1\": \"21136 S Wilmington Ave\",\n            \"address_2\": \"Ste 120\",\n            \"company\": \"\",\n            \"phone\": \"\",\n            \"postcode\": \"90810-1248\",\n            \"city\": \"Carson\",\n            \"state\": \"CA\",\n            \"country\": \"\"\n        },\n        \"balance\": 0,\n        \"email\": \"onos@example.com\",\n        \"expired_at\": \"2026-06-23T02:23:21.164866Z\",\n        \"first_name\": \"ONOS\",\n        \"last_name\": \"DEBIT\",\n        \"refresh_token\": \"\",\n        \"token\": \"\",\n        \"token_type\": \"Bearer\"\n    },\n    \"status\": true\n}"
+      },
+      {
+       "id": "7d19ca96-e83d-49ed-944f-b8cc1d0aaab7",
+       "name": "Error",
+       "originalRequest": {
+        "method": "POST",
+        "header": [],
+        "body": {
+         "mode": "urlencoded",
+         "urlencoded": [
+          {
+           "key": "email",
+           "value": "1",
+           "type": "text"
+          },
+          {
+           "key": "password",
+           "value": "",
+           "type": "text"
+          }
+         ]
+        },
+        "url": "https://api-app.onosexpress.com/api/v1/login"
+       },
+       "status": "Unauthorized",
+       "code": 401,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Length",
+         "value": "87"
+        },
+        {
+         "key": "Content-Type",
+         "value": "application/json; charset=utf-8"
+        },
+        {
+         "key": "Date",
+         "value": "Wed, 22 May 2024 03:07:50 GMT"
+        },
+        {
+         "key": "Vary",
+         "value": "Origin"
+        }
+       ],
+       "cookie": [],
+       "responseTime": null,
+       "body": "{\n    \"code\": 401,\n    \"error\": \"Invalid login info\",\n    \"extensions\": {},\n    \"status\": false\n}"
+      }
+     ],
+     "_postman_id": "deeb40e8-ad89-482c-a11b-e05c7941380b"
+    }
+   ],
+   "id": "b33496f5-1b00-4ea0-b5e7-e063e2ea8183",
+   "_postman_id": "b33496f5-1b00-4ea0-b5e7-e063e2ea8183",
+   "description": "",
+   "auth": {
+    "type": "bearer",
+    "bearer": {
+     "basicConfig": []
+    },
+    "isInherited": true,
+    "source": {
+     "_postman_id": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+     "id": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+     "name": "Onos Express",
+     "type": "collection"
+    }
+   }
+  },
+  {
+   "name": "PRODUCTS",
+   "item": [
+    {
+     "name": "Get Products",
+     "id": "b470ecf8-504d-44e1-a024-999c7b2ca86e",
+     "protocolProfileBehavior": {
+      "disableBodyPruning": true
+     },
+     "request": {
+      "auth": {
+       "type": "bearer",
+       "bearer": {
+        "basicConfig": [
+         {
+          "key": "token",
+          "value": ""
+         }
+        ]
+       },
+       "isInherited": false
+      },
+      "method": "GET",
+      "header": [],
+      "url": "https://api-app.onosexpress.com/api/v1/products/?page_size=10&page=1",
+      "urlObject": {
+       "path": [
+        "products",
+        ""
+       ],
+       "host": [
+        "https://api-app.onosexpress.com/api/v1"
+       ],
+       "query": [
+        {
+         "key": "page_size",
+         "value": "10"
+        },
+        {
+         "key": "page",
+         "value": "1"
+        }
+       ],
+       "variable": []
+      }
+     },
+     "response": [
+      {
+       "id": "dd8ee23a-fc13-4c43-994b-c709a02e1cd4",
+       "name": "Products",
+       "originalRequest": {
+        "method": "GET",
+        "header": [],
+        "url": "https://api-app.onosexpress.com/api/v1/products"
+       },
+       "status": "OK",
+       "code": 200,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Length",
+         "value": "420"
+        },
+        {
+         "key": "Content-Type",
+         "value": "application/json; charset=utf-8"
+        },
+        {
+         "key": "Date",
+         "value": "Wed, 22 May 2024 03:22:59 GMT"
+        },
+        {
+         "key": "Set-Cookie",
+         "value": "_uid=63a984f6e575e942105a955c; path=/; httponly"
+        },
+        {
+         "key": "Vary",
+         "value": "Origin"
+        }
+       ],
+       "cookie": [],
+       "responseTime": null,
+       "body": "{\n    \"status\": true,\n    \"data\": [\n        {\n            \"id\": \"IT-42097-00566\",\n            \"sku\": \"POLO-SHIRT\",\n            \"name\": \"POLO SHIRT\",\n            \"name_vi\": \"Áo Polo nam\",\n            \"images\": [\n                \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1716348174_l4iegh.jpeg\",\n                \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1716348174_10yWYC.jpeg\"\n            ],\n            \"currency\": \"USD\",\n            \"attributes\": [],\n            \"variants\": [],\n            \"weight\": 250,\n            \"width\": 200,\n            \"height\": 2.5,\n            \"length\": 12,\n            \"created_at\": \"2024-05-22T03:14:58.974Z\"\n        }\n    ]\n}"
+      }
+     ],
+     "_postman_id": "b470ecf8-504d-44e1-a024-999c7b2ca86e"
+    },
+    {
+     "name": "Get Materials",
+     "id": "2a96cce1-012c-46e1-91fa-2cd5d04ef21a",
+     "protocolProfileBehavior": {
+      "disableBodyPruning": true
+     },
+     "request": {
+      "auth": {
+       "type": "bearer",
+       "bearer": {
+        "basicConfig": [
+         {
+          "key": "token",
+          "value": ""
+         }
+        ]
+       },
+       "isInherited": false
+      },
+      "method": "GET",
+      "header": [],
+      "url": "https://api-app.onosexpress.com/api/v1/products/materials?page_size=200&page=1",
+      "urlObject": {
+       "path": [
+        "products",
+        "materials"
+       ],
+       "host": [
+        "https://api-app.onosexpress.com/api/v1"
+       ],
+       "query": [
+        {
+         "key": "page_size",
+         "value": "200"
+        },
+        {
+         "key": "page",
+         "value": "1"
+        }
+       ],
+       "variable": []
+      }
+     },
+     "response": [
+      {
+       "id": "7f509416-1f8d-48b9-855a-ed3cf9f1be5e",
+       "name": "Success",
+       "originalRequest": {
+        "method": "GET",
+        "header": [],
+        "url": {
+         "raw": "https://api-app.onosexpress.com/api/v1/products/materials?page_size=200&page=1",
+         "host": [
+          "https://api-app.onosexpress.com/api/v1"
+         ],
+         "path": [
+          "products",
+          "materials"
+         ],
+         "query": [
+          {
+           "key": "page_size",
+           "value": "200"
+          },
+          {
+           "key": "page",
+           "value": "1"
+          }
+         ]
+        }
+       },
+       "status": "OK",
+       "code": 200,
+       "_postman_previewlanguage": null,
+       "header": [
+        {
+         "key": "Access-Control-Allow-Credentials",
+         "value": "true"
+        },
+        {
+         "key": "Access-Control-Allow-Headers",
+         "value": "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-Auth-Refresh-Token, accept, origin, Cache-Control, X-Requested-With, X-Frame-Options, X-Forwarded-For, Next-Action"
+        },
+        {
+         "key": "Access-Control-Allow-Methods",
+         "value": "POST, HEAD, PATCH, OPTIONS, GET, PUT"
+        },
+        {
+         "key": "Access-Control-Allow-Origin",
+         "value": "*"
+        },
+        {
+         "key": "Content-Encoding",
+         "value": "gzip"
+        },
+        {
+         "key": "Content-Type",
+         "value": "application/json; charset=utf-8"
+        },
+        {
+         "key": "Date",
+         "value": "Fri, 24 Oct 2025 08:03:52 GMT"
+        },
+        {
+         "key": "Ngrok-Agent-Ips",
+         "value": "117.4.245.21"
+        },
+        {
+         "key": "Vary",
+         "value": "Accept-Encoding"
+        },
+        {
+         "key": "X-Express-Id",
+         "value": "cd176ec2-70f5-498e-87ce-d6512fb0b5e9"
+        },
+        {
+         "key": "Transfer-Encoding",
+         "value": "chunked"
+        }
+       ],
+       "cookie": [],
+       "responseTime": null,
+       "body": "{\n    \"data\": [\n        {\n            \"id\": 43,\n            \"sku\": \"ONOS1132\",\n            \"name\": \"Embroidered Classic Unisex Hoodie\",\n            \"name_vi\": \"Hoodie\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1760676136_sO8wpN.jpeg\"\n                }\n            ],\n            \"description\": \"Embroidered Classic Unisex Hoodie\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.62,\n            \"created_at\": \"2025-10-17T04:41:52.913Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.286573Z\"\n        },\n        {\n            \"id\": 124,\n            \"sku\": \"ONOS1131\",\n            \"name\": \"Embroidered Classic Unisex Sweatshirt\",\n            \"name_vi\": \"Sweatshirt\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1760676059_F2l5zY.jpeg\"\n                }\n            ],\n            \"description\": \"Embroidered Classic Unisex Sweatshirt\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.62,\n            \"created_at\": \"2025-10-17T04:40:50.337Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.309178Z\"\n        },\n        {\n            \"id\": 123,\n            \"sku\": \"ONOS1130\",\n            \"name\": \"All-Over Print Embroidered Logo Men's Polo Shirt\",\n            \"name_vi\": \"All-Over Print Embroidered Logo Men's Polo Shirt\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1760327844_XPAk3f.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Embroidered Logo Men's Polo Shirt\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.44,\n            \"created_at\": \"2025-10-13T03:57:24.37Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.308928Z\"\n        },\n        {\n            \"id\": 120,\n            \"sku\": \"ONOS1129\",\n            \"name\": \"All-over Print Kid and Youth Satin Pajamas Set\",\n            \"name_vi\": \"All-over Print Kid and Youth Satin Pajamas Set\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1760327388_aJ4aLM.jpeg\"\n                }\n            ],\n            \"description\": \"All-over Print Kid and Youth Satin Pajamas Set\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.35,\n            \"created_at\": \"2025-10-13T03:49:48.808Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.308282Z\"\n        },\n        {\n            \"id\": 118,\n            \"sku\": \"ONOS1128\",\n            \"name\": \"All-over Print Kid and Youth Satin Short-Sleeve Pajamas Set\",\n            \"name_vi\": \"All-over Print Kid and Youth Satin Short-Sleeve Pajamas Set\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1760321907_0J67cs.jpeg\"\n                }\n            ],\n            \"description\": \"All-over Print Kid and Youth Satin Short-Sleeve Pajamas Set\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.35,\n            \"created_at\": \"2025-10-13T02:18:27.566Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.307833Z\"\n        },\n        {\n            \"id\": 116,\n            \"sku\": \"ONOS1127\",\n            \"name\": \"All-Over Print Fleece Pajama Pants\",\n            \"name_vi\": \"Pajama Pants\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1760266896_CUjfSS.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Fleece Pajama Pants\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.94,\n            \"created_at\": \"2025-10-12T11:01:36.718Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.307387Z\"\n        },\n        {\n            \"id\": 71,\n            \"sku\": \"ONOS1070\",\n            \"name\": \"MaryStatue- Wooden Art Piece\",\n            \"name_vi\": \"Tượng  Gỗ\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1759482117_Y49Tlr.jpeg\"\n                }\n            ],\n            \"description\": \"MaryStatue- Wooden Art Piece\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 2.55,\n            \"created_at\": \"2025-10-03T09:01:57.834Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.306225Z\"\n        },\n        {\n            \"id\": 113,\n            \"sku\": \"ONOS1126\",\n            \"name\": \"Stuffed animal- premium fabric with soft, non-shedding fur and durable corduroy feet\",\n            \"name_vi\": \"Thú nhồi bông\",\n            \"images\": null,\n            \"description\": \"Stuffed animal- premium fabric with soft, non-shedding fur and durable corduroy feet\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.2,\n            \"created_at\": \"2025-09-24T09:26:13.358Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.305745Z\"\n        },\n        {\n            \"id\": 111,\n            \"sku\": \"ONOS1125\",\n            \"name\": \"Fleece Blanket - 100% polyester knit blanket\",\n            \"name_vi\": \"Chăn\",\n            \"images\": null,\n            \"description\": \"Fleece Blanket - 100% polyester knit blanket\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.71,\n            \"created_at\": \"2025-09-15T04:56:25.279Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.305386Z\"\n        },\n        {\n            \"id\": 109,\n            \"sku\": \"ONOS1124\",\n            \"name\": \"Acrylic Keychain\",\n            \"name_vi\": \"MÓC KHÓA \",\n            \"images\": null,\n            \"description\": \"Acrylic Keychain\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.24,\n            \"created_at\": \"2025-09-10T09:16:29.257Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.304943Z\"\n        },\n        {\n            \"id\": 107,\n            \"sku\": \"ONOS1123\",\n            \"name\": \"TSHIRT - Unisex - Knit\",\n            \"name_vi\": \"TSHIRT\",\n            \"images\": null,\n            \"description\": \"TSHIRT - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.04,\n            \"created_at\": \"2025-09-10T07:22:25.101Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.304521Z\"\n        },\n        {\n            \"id\": 105,\n            \"sku\": \"ONOS1122\",\n            \"name\": \"PHONE CASE\",\n            \"name_vi\": \"Ốp đt\",\n            \"images\": null,\n            \"description\": \"PHONE CASE\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.75,\n            \"created_at\": \"2025-09-10T07:20:11.582Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.304047Z\"\n        },\n        {\n            \"id\": 103,\n            \"sku\": \"ONOS1121\",\n            \"name\": \"TOYS - Collectible toy model with detailed construction\",\n            \"name_vi\": \"ĐỒ CHƠI\",\n            \"images\": null,\n            \"description\": \"TOYS - Collectible toy model with detailed construction\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 2,\n            \"created_at\": \"2025-09-10T07:17:57.863Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.30363Z\"\n        },\n        {\n            \"id\": 101,\n            \"sku\": \"ONOS1120\",\n            \"name\": \"slippers\",\n            \"name_vi\": \"DÉP\",\n            \"images\": null,\n            \"description\": \"slippers\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 2.3,\n            \"created_at\": \"2025-09-10T07:16:14.876Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.303213Z\"\n        },\n        {\n            \"id\": 100,\n            \"sku\": \"ONOS1119\",\n            \"name\": \"Sport shoes\",\n            \"name_vi\": \"GIÀY THỂ THAO\",\n            \"images\": null,\n            \"description\": \"Sport shoes\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 2.3,\n            \"created_at\": \"2025-09-10T07:13:01.816Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.303038Z\"\n        },\n        {\n            \"id\": 122,\n            \"sku\": \"ONOS1118\",\n            \"name\": \"Acrylic1L\",\n            \"name_vi\": \"Acrylic1L\",\n            \"images\": null,\n            \"description\": \"Acrylic1L\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.25,\n            \"created_at\": \"2025-09-10T04:14:26.394Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.308669Z\"\n        },\n        {\n            \"id\": 121,\n            \"sku\": \"ONOS1117\",\n            \"name\": \"Ornament1L\",\n            \"name_vi\": \"Ornament1L\",\n            \"images\": null,\n            \"description\": \"Ornament1L\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.23,\n            \"created_at\": \"2025-09-10T04:13:15.503Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.308486Z\"\n        },\n        {\n            \"id\": 119,\n            \"sku\": \"ONOS1116\",\n            \"name\": \"Glass Suncatcher1L\",\n            \"name_vi\": \"Glass Suncatcher1L\",\n            \"images\": null,\n            \"description\": \"Glass Suncatcher1L\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.54,\n            \"created_at\": \"2025-09-10T04:12:12.158Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.308014Z\"\n        },\n        {\n            \"id\": 117,\n            \"sku\": \"ONOS1115\",\n            \"name\": \"Suncatcher2L\",\n            \"name_vi\": \"Phụ kiện trang trí\",\n            \"images\": null,\n            \"description\": \"Suncatcher2L\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.25,\n            \"created_at\": \"2025-09-10T04:09:11.185Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.307581Z\"\n        },\n        {\n            \"id\": 115,\n            \"sku\": \"ONOS1114\",\n            \"name\": \"Leather handbag\",\n            \"name_vi\": \"túi xách\",\n            \"images\": null,\n            \"description\": \"Leather handbag\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 2.9,\n            \"created_at\": \"2025-09-10T04:00:15.676Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.307134Z\"\n        },\n        {\n            \"id\": 114,\n            \"sku\": \"ONOS1113\",\n            \"name\": \"IRON CHAIN WITH SUCTION CUP\",\n            \"name_vi\": \"Xích sắt có giác hút\",\n            \"images\": null,\n            \"description\": \"IRON CHAIN WITH SUCTION CUP\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.24,\n            \"created_at\": \"2025-09-09T09:06:35.667Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.305927Z\"\n        },\n        {\n            \"id\": 112,\n            \"sku\": \"ONOS1112\",\n            \"name\": \"Wooden stand\",\n            \"name_vi\": \"Giá vẽ bằng gỗ\",\n            \"images\": null,\n            \"description\": \"Wooden stand\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.25,\n            \"created_at\": \"2025-09-09T08:52:38.712Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.305565Z\"\n        },\n        {\n            \"id\": 110,\n            \"sku\": \"ONOS1111\",\n            \"name\": \"All-Over Print Women's T-shirt\",\n            \"name_vi\": \"All-Over Print Women's T-shirt - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1754550695_QqPbWK.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Women's T-shirt\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.8,\n            \"created_at\": \"2025-09-06T17:03:49.267Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.305192Z\"\n        },\n        {\n            \"id\": 108,\n            \"sku\": \"ONOS1110\",\n            \"name\": \"All-Over Print Women's Racerback Tank Top\",\n            \"name_vi\": \"All-Over Print Women's Racerback Tank Top - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1754550763_zjd1FC.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Women's Racerback Tank Top\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.12,\n            \"created_at\": \"2025-09-06T17:03:49.244Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.304761Z\"\n        },\n        {\n            \"id\": 106,\n            \"sku\": \"ONOS1109\",\n            \"name\": \"All-Over Print Women's Hoodie\",\n            \"name_vi\": \"All-Over Print Women's Hoodie - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1754550821_YNct4L.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Women's Hoodie\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.46,\n            \"created_at\": \"2025-09-06T17:03:49.187Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.304318Z\"\n        },\n        {\n            \"id\": 104,\n            \"sku\": \"ONOS1108\",\n            \"name\": \"All-Over Print Sport Mesh Shorts - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Sport Mesh Shorts - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748780945_vHqPmw.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Sport Mesh Shorts - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T17:03:49.154Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.303863Z\"\n        },\n        {\n            \"id\": 102,\n            \"sku\": \"ONOS1107\",\n            \"name\": \"All-Over Print Satin Pajama Shorts - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Satin Pajama Shorts - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750997219_lplB5I.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Satin Pajama Shorts - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.61,\n            \"created_at\": \"2025-09-06T17:03:49.127Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.303455Z\"\n        },\n        {\n            \"id\": 99,\n            \"sku\": \"ONOS1106\",\n            \"name\": \"All-Over Print Satin Short-Sleeve Pajama Shirt - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Satin Short-Sleeve Pajama Shirt - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750997489_SQkqnI.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Satin Short-Sleeve Pajama Shirt - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.61,\n            \"created_at\": \"2025-09-06T17:03:49.108Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.302834Z\"\n        },\n        {\n            \"id\": 96,\n            \"sku\": \"ONOS1105\",\n            \"name\": \"All-Over Print Premium Sweatshirt 270 GSM - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Premium Sweatshirt 270 GSM - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741849649_h4s3jp.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Premium Sweatshirt 270 GSM - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.82,\n            \"created_at\": \"2025-09-06T17:03:49.086Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.302134Z\"\n        },\n        {\n            \"id\": 95,\n            \"sku\": \"ONOS1104\",\n            \"name\": \"All-Over Print Premium Hoodie 270 GSM - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Premium Hoodie 270 GSM - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741849709_O8hYkw.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Premium Hoodie 270 GSM - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.46,\n            \"created_at\": \"2025-09-06T17:03:49.056Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.301879Z\"\n        },\n        {\n            \"id\": 93,\n            \"sku\": \"ONOS1103\",\n            \"name\": \"All-Over Print Premium Zip Hoodie 270 GSM - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Premium Zip Hoodie 270 GSM - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748852417_MX4RiS.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Premium Zip Hoodie 270 GSM - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.46,\n            \"created_at\": \"2025-09-06T17:03:49.031Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.301356Z\"\n        },\n        {\n            \"id\": 91,\n            \"sku\": \"ONOS1102\",\n            \"name\": \"All-Over Print Hockey Jersey - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Hockey Jersey - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748834323_FBnwKJ.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Hockey Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T17:03:49.001Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.300933Z\"\n        },\n        {\n            \"id\": 89,\n            \"sku\": \"ONOS1101\",\n            \"name\": \"All-Over Print Lace Neck Hockey Jersey - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Lace Neck Hockey Jersey - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748770580_qMqqlD.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Lace Neck Hockey Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T17:03:48.973Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.300409Z\"\n        },\n        {\n            \"id\": 87,\n            \"sku\": \"ONOS1100\",\n            \"name\": \"All-Over Print Satin Long-Sleeve Pajama Shirt - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Satin Long-Sleeve Pajama Shirt - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750998365_ehJ8YM.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Satin Long-Sleeve Pajama Shirt - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.61,\n            \"created_at\": \"2025-09-06T17:03:48.945Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.299842Z\"\n        },\n        {\n            \"id\": 85,\n            \"sku\": \"ONOS1099\",\n            \"name\": \"All-Over Print Satin Long Pajama Pants - No Piping - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Satin Long Pajama Pants - No Piping - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750923863_BKfXJQ.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Satin Long Pajama Pants - No Piping - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.61,\n            \"created_at\": \"2025-09-06T17:03:48.917Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.299316Z\"\n        },\n        {\n            \"id\": 83,\n            \"sku\": \"ONOS1098\",\n            \"name\": \"All-Over Print Satin Long-Sleeve Pajama Shirt - No Piping - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Satin Long-Sleeve Pajama Shirt - No Piping - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750999303_6OuyiU.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Satin Long-Sleeve Pajama Shirt - No Piping - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.61,\n            \"created_at\": \"2025-09-06T17:03:48.885Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.298793Z\"\n        },\n        {\n            \"id\": 82,\n            \"sku\": \"ONOS1097\",\n            \"name\": \"Double-Sided Printed Canvas Flag\",\n            \"name_vi\": \"Double-Sided Printed Canvas Flag - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748835151_TOOnjp.jpeg\"\n                }\n            ],\n            \"description\": \"Double-Sided Printed Canvas Flag\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.64,\n            \"created_at\": \"2025-09-06T17:03:48.862Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.298542Z\"\n        },\n        {\n            \"id\": 77,\n            \"sku\": \"ONOS1096\",\n            \"name\": \"Women's Sleeveless Performance Polo Shirt\",\n            \"name_vi\": \"Women's Sleeveless Performance Polo Shirt - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748782953_qfeHqs.jpeg\"\n                }\n            ],\n            \"description\": \"Women's Sleeveless Performance Polo Shirt\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.8,\n            \"created_at\": \"2025-09-06T17:03:48.835Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.29708Z\"\n        },\n        {\n            \"id\": 73,\n            \"sku\": \"ONOS1095\",\n            \"name\": \"All-Over Print Premium Women's Polo Shirt\",\n            \"name_vi\": \"All-Over Print Premium Women's Polo Shirt - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748783082_9I2p1d.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Premium Women's Polo Shirt\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.8,\n            \"created_at\": \"2025-09-06T17:03:48.812Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.296169Z\"\n        },\n        {\n            \"id\": 69,\n            \"sku\": \"ONOS1094\",\n            \"name\": \"All-Over Print V-neck Soccer Jersey - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print V-neck Soccer Jersey - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750061593_oGluEx.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print V-neck Soccer Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.2,\n            \"created_at\": \"2025-09-06T17:03:48.789Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.295355Z\"\n        },\n        {\n            \"id\": 60,\n            \"sku\": \"ONOS1093\",\n            \"name\": \"All-Over Print Women's Sleeveless Crop Top\",\n            \"name_vi\": \"All-Over Print Women's Sleeveless Crop Top - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1751529178_TFfgbf.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Women's Sleeveless Crop Top\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T17:03:48.764Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.292854Z\"\n        },\n        {\n            \"id\": 45,\n            \"sku\": \"ONOS1092\",\n            \"name\": \"All-Over Print Football Jersey - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Football Jersey - 60% cotton, 40% poly\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750038946_2g7H0x.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Football Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T17:03:48.733Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.287351Z\"\n        },\n        {\n            \"id\": 44,\n            \"sku\": \"ONOS1091\",\n            \"name\": \"All-Over Print Men's Tank Top\",\n            \"name_vi\": \"Áo tank top nam\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741859992_3NsdGy.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Men's Tank Top\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.94,\n            \"created_at\": \"2025-09-06T14:24:07.27Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.286952Z\"\n        },\n        {\n            \"id\": 98,\n            \"sku\": \"ONOS1089\",\n            \"name\": \"All-Over Print Mesh Football Crop Top Jersey - Unisex - Knit\",\n            \"name_vi\": \"Tshirt\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1755858185_TnFlfz.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Mesh Football Crop Top Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:51:24.763Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.302571Z\"\n        },\n        {\n            \"id\": 97,\n            \"sku\": \"ONOS1088\",\n            \"name\": \"Wooden Art Piece- Wooden Art Piece\",\n            \"name_vi\": \"Metal sign\",\n            \"images\": null,\n            \"description\": \"Wooden Art Piece- Wooden Art Piece\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.59,\n            \"created_at\": \"2025-09-06T07:36:22.96Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.302317Z\"\n        },\n        {\n            \"id\": 94,\n            \"sku\": \"ONOS1086\",\n            \"name\": \"necklace- Necklace, Earrings, Earrings or Bracelet with platinum\",\n            \"name_vi\": \"DÂY CHUYỀN\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718698845_HrlI6x.jpeg\"\n                }\n            ],\n            \"description\": \"necklace- Necklace, Earrings, Earrings or Bracelet with platinum\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.25,\n            \"created_at\": \"2025-09-06T07:36:22.905Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.301607Z\"\n        },\n        {\n            \"id\": 92,\n            \"sku\": \"ONOS1084\",\n            \"name\": \"Card- Card\",\n            \"name_vi\": \"\",\n            \"images\": null,\n            \"description\": \"Card- Card\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 6,\n            \"created_at\": \"2025-09-06T07:36:22.856Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.301118Z\"\n        },\n        {\n            \"id\": 90,\n            \"sku\": \"ONOS1083\",\n            \"name\": \"Hat- Adjustable baseball cap with cross patch design\",\n            \"name_vi\": \"MŨ\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718699090_Ys8q5e.jpeg\"\n                }\n            ],\n            \"description\": \"Hat- Adjustable baseball cap with cross patch design\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.33,\n            \"created_at\": \"2025-09-06T07:36:22.816Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.300683Z\"\n        },\n        {\n            \"id\": 88,\n            \"sku\": \"ONOS1081\",\n            \"name\": \"All-over 3DSHIRT- 3D printed graphic T-shirt, casual unisex style - 60% cotton - 40% poly\",\n            \"name_vi\": \"T-shirt\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741859266_MacHop.jpeg\"\n                }\n            ],\n            \"description\": \"All-over 3DSHIRT- 3D printed graphic T-shirt, casual unisex style - 60% cotton - 40% poly\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.56,\n            \"created_at\": \"2025-09-06T07:36:22.775Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.300094Z\"\n        },\n        {\n            \"id\": 86,\n            \"sku\": \"ONOS1080\",\n            \"name\": \"Collectible toy model with detailed construction\",\n            \"name_vi\": \"ĐÒ CHƠI MÔ HÌNH\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718784125_cWM2wu.jpeg\"\n                }\n            ],\n            \"description\": \"Collectible toy model with detailed construction\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.4,\n            \"created_at\": \"2025-09-06T07:36:22.753Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.299574Z\"\n        },\n        {\n            \"id\": 84,\n            \"sku\": \"ONOS1079\",\n            \"name\": \"GLASSES- Fashion eyeglasses with metal frame, unisex design\",\n            \"name_vi\": \"KÍNH\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718784069_Jctjd1.jpeg\"\n                }\n            ],\n            \"description\": \"GLASSES- Fashion eyeglasses with metal frame, unisex design\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.24,\n            \"created_at\": \"2025-09-06T07:36:22.734Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.299055Z\"\n        },\n        {\n            \"id\": 81,\n            \"sku\": \"ONOS1078\",\n            \"name\": \"BELT- Unisex leather belt with metal buckle, retro style\",\n            \"name_vi\": \"THẮT LƯNG\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718784308_QVcya6.jpeg\"\n                }\n            ],\n            \"description\": \"BELT- Unisex leather belt with metal buckle, retro style\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.27,\n            \"created_at\": \"2025-09-06T07:36:22.715Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.29829Z\"\n        },\n        {\n            \"id\": 80,\n            \"sku\": \"ONOS1077\",\n            \"name\": \"HAT- Adjustable baseball cap with cross patch design\",\n            \"name_vi\": \"MŨ\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718699090_Ys8q5e.jpeg\"\n                }\n            ],\n            \"description\": \"HAT- Adjustable baseball cap with cross patch design\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.38,\n            \"created_at\": \"2025-09-06T07:36:22.695Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.298029Z\"\n        },\n        {\n            \"id\": 79,\n            \"sku\": \"ONOS1076\",\n            \"name\": \"PHONE CASE- Silicone protective phone case compatible with iPhone 11–16\",\n            \"name_vi\": \"ỐP ĐIỆN THOẠI\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718698438_rlPNH0.jpeg\"\n                }\n            ],\n            \"description\": \"PHONE CASE- Silicone protective phone case compatible with iPhone 11–16\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.38,\n            \"created_at\": \"2025-09-06T07:36:22.676Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.297647Z\"\n        },\n        {\n            \"id\": 78,\n            \"sku\": \"ONOS1075\",\n            \"name\": \"WALLET- PU leather protective case for AirPods Pro Gen 2\",\n            \"name_vi\": \"ví da\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718784266_0bAedv.jpeg\"\n                }\n            ],\n            \"description\": \"WALLET- PU leather protective case for AirPods Pro Gen 2\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.25,\n            \"created_at\": \"2025-09-06T07:36:22.653Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.297369Z\"\n        },\n        {\n            \"id\": 76,\n            \"sku\": \"ONOS1074\",\n            \"name\": \"BOOK- Guidebook for off-grid living without public utilities\",\n            \"name_vi\": \"BOOK- Guidebook for off-grid living without public utilities\",\n            \"images\": null,\n            \"description\": \"BOOK- Guidebook for off-grid living without public utilities\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.24,\n            \"created_at\": \"2025-09-06T07:36:22.634Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.296827Z\"\n        },\n        {\n            \"id\": 75,\n            \"sku\": \"ONOS1073\",\n            \"name\": \"CROCS- Red Crocs shoes for kids with cartoon character design\",\n            \"name_vi\": \"Dép\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718874530_1uy8c4.jpeg\"\n                }\n            ],\n            \"description\": \"CROCS- Red Crocs shoes for kids with cartoon character design\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 3.45,\n            \"created_at\": \"2025-09-06T07:36:22.605Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.296623Z\"\n        },\n        {\n            \"id\": 74,\n            \"sku\": \"ONOS1072\",\n            \"name\": \"Suncatcher- Wooden and acrylic souvenirs with adhesive\",\n            \"name_vi\": \"Metal sign\",\n            \"images\": null,\n            \"description\": \"Suncatcher- Wooden and acrylic souvenirs with adhesive\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.23,\n            \"created_at\": \"2025-09-06T07:36:22.583Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.296359Z\"\n        },\n        {\n            \"id\": 72,\n            \"sku\": \"ONOS1071\",\n            \"name\": \"Wooden dog frame- Wooden souvenirs\",\n            \"name_vi\": \"Metal sign\",\n            \"images\": null,\n            \"description\": \"Wooden dog frame- Wooden souvenirs\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.46,\n            \"created_at\": \"2025-09-06T07:36:22.56Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.295916Z\"\n        },\n        {\n            \"id\": 70,\n            \"sku\": \"ONOS1069\",\n            \"name\": \"Metal sign- Metal souvenirs\",\n            \"name_vi\": \"bình nước\",\n            \"images\": null,\n            \"description\": \"Metal sign- Metal souvenirs\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.6,\n            \"created_at\": \"2025-09-06T07:36:22.498Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.295569Z\"\n        },\n        {\n            \"id\": 68,\n            \"sku\": \"ONOS1068\",\n            \"name\": \"Acrylic- Acrylic souvenirs\",\n            \"name_vi\": \"Acrylic\",\n            \"images\": null,\n            \"description\": \"Acrylic- Acrylic souvenirs\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.26,\n            \"created_at\": \"2025-09-06T07:36:22.453Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.295104Z\"\n        },\n        {\n            \"id\": 67,\n            \"sku\": \"ONOS1067\",\n            \"name\": \"ANIMAL PUZZLES- Wooden souvenirs\",\n            \"name_vi\": \"Metal sign\",\n            \"images\": null,\n            \"description\": \"ANIMAL PUZZLES- Wooden souvenirs\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.46,\n            \"created_at\": \"2025-09-06T07:36:22.424Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.294913Z\"\n        },\n        {\n            \"id\": 66,\n            \"sku\": \"ONOS1066\",\n            \"name\": \"Glass Suncatcher- Glass souvenirs\",\n            \"name_vi\": \"Glass Suncatcher\",\n            \"images\": null,\n            \"description\": \"Glass Suncatcher- Glass souvenirs\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.92,\n            \"created_at\": \"2025-09-06T07:36:22.401Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.294658Z\"\n        },\n        {\n            \"id\": 65,\n            \"sku\": \"ONOS1065\",\n            \"name\": \"NewBalance9060- sport shoes\",\n            \"name_vi\": \"NewBalance9060- sport shoes\",\n            \"images\": null,\n            \"description\": \"NewBalance9060- sport shoes\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 3.05,\n            \"created_at\": \"2025-09-06T07:36:22.371Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.294399Z\"\n        },\n        {\n            \"id\": 64,\n            \"sku\": \"ONOS1064\",\n            \"name\": \"crocs- Red Crocs shoes for kids with cartoon character design\",\n            \"name_vi\": \"Dép\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718874530_1uy8c4.jpeg\"\n                }\n            ],\n            \"description\": \"crocs- Red Crocs shoes for kids with cartoon character design\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.69,\n            \"created_at\": \"2025-09-06T07:36:22.34Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.294134Z\"\n        },\n        {\n            \"id\": 63,\n            \"sku\": \"ONOS1063\",\n            \"name\": \"r14- mesh's shirt, of man-made fibers\",\n            \"name_vi\": \"\",\n            \"images\": null,\n            \"description\": \"r14- mesh's shirt, of man-made fibers\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 11.44,\n            \"created_at\": \"2025-09-06T07:36:22.313Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.293788Z\"\n        },\n        {\n            \"id\": 62,\n            \"sku\": \"ONOS1062\",\n            \"name\": \"rhode- phone case\",\n            \"name_vi\": \"rhode- phone case\",\n            \"images\": null,\n            \"description\": \"rhode- phone case\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.51,\n            \"created_at\": \"2025-09-06T07:36:22.274Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.293515Z\"\n        },\n        {\n            \"id\": 61,\n            \"sku\": \"ONOS1061\",\n            \"name\": \"Hoodie wash- Mesh's hoodie\",\n            \"name_vi\": \"Hoodie wash- Mesh's hoodie\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onosexpress_com/1657938018_UphfV1.jpeg\"\n                }\n            ],\n            \"description\": \"Hoodie wash- Mesh's hoodie\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.02,\n            \"created_at\": \"2025-09-06T07:36:22.245Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.293217Z\"\n        },\n        {\n            \"id\": 59,\n            \"sku\": \"ONOS1060\",\n            \"name\": \"Tshirt Wash- Mesh's shirt, of man-made fibers - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741859266_MacHop.jpeg\"\n                }\n            ],\n            \"description\": \"Tshirt Wash- Mesh's shirt, of man-made fibers - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 2.6,\n            \"created_at\": \"2025-09-06T07:36:22.23Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.292466Z\"\n        },\n        {\n            \"id\": 58,\n            \"sku\": \"ONOS1059\",\n            \"name\": \"Seashell hair clip- MATERIAL: fabric\",\n            \"name_vi\": \"\",\n            \"images\": null,\n            \"description\": \"Seashell hair clip- MATERIAL: fabric\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.43,\n            \"created_at\": \"2025-09-06T07:36:22.205Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.292064Z\"\n        },\n        {\n            \"id\": 57,\n            \"sku\": \"ONOS1058\",\n            \"name\": \"Woven Pet Hats- Material: Wool\",\n            \"name_vi\": \"Móc khoá\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718874957_r7fKBh.jpeg\"\n                }\n            ],\n            \"description\": \"Woven Pet Hats- Material: Wool\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 2.32,\n            \"created_at\": \"2025-09-06T07:36:22.158Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.291773Z\"\n        },\n        {\n            \"id\": 56,\n            \"sku\": \"ONOS1057\",\n            \"name\": \"Model Robot- Plastic/mechanical toy robot model\",\n            \"name_vi\": \"\",\n            \"images\": null,\n            \"description\": \"Model Robot- Plastic/mechanical toy robot model\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.4,\n            \"created_at\": \"2025-09-06T07:36:22.118Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.291393Z\"\n        },\n        {\n            \"id\": 55,\n            \"sku\": \"ONOS1056\",\n            \"name\": \"Model Action Figure- Plastic articulated collectible figure\",\n            \"name_vi\": \"\",\n            \"images\": null,\n            \"description\": \"Model Action Figure- Plastic articulated collectible figure\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:36:22.061Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.291085Z\"\n        },\n        {\n            \"id\": 54,\n            \"sku\": \"ONOS1055\",\n            \"name\": \"Cotton Hoodie- Cotton/polyester blend pullover hoodie\",\n            \"name_vi\": \"Cotton Hoodie- Cotton/polyester blend pullover hoodie\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onosexpress_com/1657938018_UphfV1.jpeg\"\n                }\n            ],\n            \"description\": \"Cotton Hoodie- Cotton/polyester blend pullover hoodie\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.02,\n            \"created_at\": \"2025-09-06T07:36:22.031Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.290806Z\"\n        },\n        {\n            \"id\": 53,\n            \"sku\": \"ONOS1054\",\n            \"name\": \"Polyester Hoodie- Polyester fleece hoodie with drawstring - Unisex - Knit\",\n            \"name_vi\": \"Polyester Hoodie- Polyester fleece hoodie with drawstring\",\n            \"images\": null,\n            \"description\": \"Polyester Hoodie- Polyester fleece hoodie with drawstring - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.46,\n            \"created_at\": \"2025-09-06T07:36:22.002Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.290438Z\"\n        },\n        {\n            \"id\": 52,\n            \"sku\": \"ONOS1053\",\n            \"name\": \"Cotton T-Shirt- 100% cotton short sleeve unisex T-shirt\",\n            \"name_vi\": \"Giỏ mây đan\",\n            \"images\": null,\n            \"description\": \"Cotton T-Shirt- 100% cotton short sleeve unisex T-shirt\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.82,\n            \"created_at\": \"2025-09-06T07:36:21.972Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.290174Z\"\n        },\n        {\n            \"id\": 51,\n            \"sku\": \"ONOS1051\",\n            \"name\": \"All-Over Print Sweater - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748783226_FTLHhy.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Sweater - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.82,\n            \"created_at\": \"2025-09-06T07:36:21.924Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.289894Z\"\n        },\n        {\n            \"id\": 50,\n            \"sku\": \"ONOS1050\",\n            \"name\": \"All-Over Print Hoodie 230 GSM - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Hoodie 230 GSM\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741860053_amEgJe.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Hoodie 230 GSM - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.46,\n            \"created_at\": \"2025-09-06T07:36:21.894Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.289522Z\"\n        },\n        {\n            \"id\": 49,\n            \"sku\": \"ONOS1049\",\n            \"name\": \"All-Over Print Loose Sweatpants\",\n            \"name_vi\": \"Bikini\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748774056_lPnmGt.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Loose Sweatpants\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.77,\n            \"created_at\": \"2025-09-06T07:36:21.867Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.28913Z\"\n        },\n        {\n            \"id\": 48,\n            \"sku\": \"ONOS1048\",\n            \"name\": \"All-Over Print Pocket Unisex Hawaiian Shirt - Unisex - Knit\",\n            \"name_vi\": \"Quần bó gym\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750925426_c5btFW.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Pocket Unisex Hawaiian Shirt - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.91,\n            \"created_at\": \"2025-09-06T07:36:21.847Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.288537Z\"\n        },\n        {\n            \"id\": 47,\n            \"sku\": \"ONOS1047\",\n            \"name\": \"All-Over Print Short-Sleeve Hawaiian Shirt - Unisex - Knit\",\n            \"name_vi\": \"Quần bó gym\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1745402635_aPyhvB.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Short-Sleeve Hawaiian Shirt - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.91,\n            \"created_at\": \"2025-09-06T07:36:21.83Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.28815Z\"\n        },\n        {\n            \"id\": 46,\n            \"sku\": \"ONOS1046\",\n            \"name\": \"All-Over Print Women's Leggings\",\n            \"name_vi\": \"Aó chui đầu\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1747881346_ntQPtJ.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Women's Leggings\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.06,\n            \"created_at\": \"2025-09-06T07:36:21.812Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.287733Z\"\n        },\n        {\n            \"id\": 26,\n            \"sku\": \"ONOS1045\",\n            \"name\": \"All-Over Print Kids and Youth Baseball Jersey - Unisex - Knit\",\n            \"name_vi\": \"Cốc thuỷ tinh\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750924103_9ru8ex.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Kids and Youth Baseball Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:36:21.796Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.277101Z\"\n        },\n        {\n            \"id\": 129,\n            \"sku\": \"ONOS1044\",\n            \"name\": \"All-Over Print Premium Men's Polo Shirt\",\n            \"name_vi\": \"Áo polo nam\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748781119_0QyNlY.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Premium Men's Polo Shirt\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.8,\n            \"created_at\": \"2025-09-06T07:36:21.77Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.310502Z\"\n        },\n        {\n            \"id\": 126,\n            \"sku\": \"ONOS1043\",\n            \"name\": \"All-Over Print Long-Sleeve Football Jersey - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748778908_xgB72J.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Long-Sleeve Football Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:36:21.753Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.309733Z\"\n        },\n        {\n            \"id\": 125,\n            \"sku\": \"ONOS1042\",\n            \"name\": \"All-Over Print Satin Short-Sleeve Pajama Set\",\n            \"name_vi\": \"Áo tank top nữ\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750995595_TaUHdE.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Satin Short-Sleeve Pajama Set\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.73,\n            \"created_at\": \"2025-09-06T07:36:21.723Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.30945Z\"\n        },\n        {\n            \"id\": 128,\n            \"sku\": \"ONOS1041\",\n            \"name\": \"All-Over Print Baseball Jersey - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741859224_otKZFB.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Baseball Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:36:21.706Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.310255Z\"\n        },\n        {\n            \"id\": 127,\n            \"sku\": \"ONOS1040\",\n            \"name\": \"All-Over Print Soccer Jersey - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750038890_81oBAU.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Soccer Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.2,\n            \"created_at\": \"2025-09-06T07:36:21.683Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.309986Z\"\n        },\n        {\n            \"id\": 38,\n            \"sku\": \"ONOS1039\",\n            \"name\": \"All-Over Print Kid Short-Sleeve Hawaiian Shirt - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748834539_e92b5r.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Kid Short-Sleeve Hawaiian Shirt - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.2,\n            \"created_at\": \"2025-09-06T07:36:21.657Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.284506Z\"\n        },\n        {\n            \"id\": 42,\n            \"sku\": \"ONOS1038\",\n            \"name\": \"All-Over Print Sleeveless Jersey Tank Top - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750923966_15CBgS.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Sleeveless Jersey Tank Top - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.14,\n            \"created_at\": \"2025-09-06T07:36:21.626Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.286186Z\"\n        },\n        {\n            \"id\": 41,\n            \"sku\": \"ONOS1037\",\n            \"name\": \"All-Over Print Sweatshirt 230 GSM - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741858556_CkzCTq.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Sweatshirt 230 GSM - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.82,\n            \"created_at\": \"2025-09-06T07:36:21.585Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.285798Z\"\n        },\n        {\n            \"id\": 40,\n            \"sku\": \"ONOS1036\",\n            \"name\": \"All-Over Print Women's Briefs\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741857524_TyEjRO.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Women's Briefs\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.77,\n            \"created_at\": \"2025-09-06T07:36:21.561Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.285387Z\"\n        },\n        {\n            \"id\": 39,\n            \"sku\": \"ONOS1035\",\n            \"name\": \"All-Over Print V-neck Sleeveless Jersey Tank Top - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748932386_NM6RSB.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print V-neck Sleeveless Jersey Tank Top - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.25,\n            \"created_at\": \"2025-09-06T07:36:21.528Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.284951Z\"\n        },\n        {\n            \"id\": 130,\n            \"sku\": \"ONOS1034\",\n            \"name\": \"All-Over Print Mexico Long-Sleeve Polo Shirt - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750923907_p1K4of.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Mexico Long-Sleeve Polo Shirt - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.87,\n            \"created_at\": \"2025-09-06T07:36:21.505Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.310765Z\"\n        },\n        {\n            \"id\": 37,\n            \"sku\": \"ONOS1033\",\n            \"name\": \"All-Over Print Women's Tank Top\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741859887_0jzE6l.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Women's Tank Top\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.14,\n            \"created_at\": \"2025-09-06T07:36:21.482Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.284039Z\"\n        },\n        {\n            \"id\": 36,\n            \"sku\": \"ONOS1032\",\n            \"name\": \"All-Over Print Sports Bra - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748933064_8B5gIu.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Sports Bra - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.81,\n            \"created_at\": \"2025-09-06T07:36:21.46Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.283563Z\"\n        },\n        {\n            \"id\": 35,\n            \"sku\": \"ONOS1031\",\n            \"name\": \"All-Over Print Kids and Youth  Hoodie - 60% cotton, 40% poly\",\n            \"name_vi\": \"All-Over Print Kids Hoodie\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741858911_iVO0kF.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Kids and Youth  Hoodie - 60% cotton, 40% poly\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.01,\n            \"created_at\": \"2025-09-06T07:36:21.422Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.282874Z\"\n        },\n        {\n            \"id\": 34,\n            \"sku\": \"ONOS1030\",\n            \"name\": \"All-Over Print Basketball Mesh Shorts - Unisex - Knit\",\n            \"name_vi\": \"Bikini\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748773221_grxlWM.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Basketball Mesh Shorts - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:36:21.397Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.282246Z\"\n        },\n        {\n            \"id\": 33,\n            \"sku\": \"ONOS1029\",\n            \"name\": \"All-Over Print Hawaiian Shorts - Unisex - Knit\",\n            \"name_vi\": \"Bikini\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1742609273_jAfR0o.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Hawaiian Shorts - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.25,\n            \"created_at\": \"2025-09-06T07:36:21.375Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.281561Z\"\n        },\n        {\n            \"id\": 32,\n            \"sku\": \"ONOS1028\",\n            \"name\": \"All-Over Print Zip Hoodie 230 GSM - Unisex - Knit\",\n            \"name_vi\": \"All-Over Print Zip Hoodie 230 GSM\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741858709_uXfAaV.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Zip Hoodie 230 GSM - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.46,\n            \"created_at\": \"2025-09-06T07:36:21.353Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.280954Z\"\n        },\n        {\n            \"id\": 31,\n            \"sku\": \"ONOS1027\",\n            \"name\": \"All-Over Print Women's Sport Shorts\",\n            \"name_vi\": \"Quần đùi nam\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750924014_NmcKdT.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Women's Sport Shorts\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.41,\n            \"created_at\": \"2025-09-06T07:36:21.317Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.280329Z\"\n        },\n        {\n            \"id\": 30,\n            \"sku\": \"ONOS1026\",\n            \"name\": \"All-Over Print Men's Boxer Briefs\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741857474_zwn1P8.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Men's Boxer Briefs\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.57,\n            \"created_at\": \"2025-09-06T07:36:21.299Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.279714Z\"\n        },\n        {\n            \"id\": 29,\n            \"sku\": \"ONOS1025\",\n            \"name\": \"All-Over Print Casual Bikini Set - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748773959_L0JOqj.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Casual Bikini Set - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.26,\n            \"created_at\": \"2025-09-06T07:36:21.261Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.279091Z\"\n        },\n        {\n            \"id\": 28,\n            \"sku\": \"ONOS1024\",\n            \"name\": \"All-Over Print Satin Long Pajama Pants - Unisex - Knit\",\n            \"name_vi\": \"Áo tank top nữ\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750995462_fPqQ39.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Satin Long Pajama Pants - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.22,\n            \"created_at\": \"2025-09-06T07:36:21.237Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.278351Z\"\n        },\n        {\n            \"id\": 27,\n            \"sku\": \"ONOS1023\",\n            \"name\": \"All-over Print Basketball Shorts - Unisex - Knit\",\n            \"name_vi\": \"Bikini\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748779461_x5vJmt.jpeg\"\n                }\n            ],\n            \"description\": \"All-over Print Basketball Shorts - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.2,\n            \"created_at\": \"2025-09-06T07:36:21.221Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.27771Z\"\n        },\n        {\n            \"id\": 14,\n            \"sku\": \"ONOS1022\",\n            \"name\": \"Women Sleeveless Cropped Top- 60% cotton, 40% poly\",\n            \"name_vi\": \"\",\n            \"images\": null,\n            \"description\": \"Women Sleeveless Cropped Top- 60% cotton, 40% poly\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:36:21.2Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.269144Z\"\n        },\n        {\n            \"id\": 25,\n            \"sku\": \"ONOS1021\",\n            \"name\": \"All-Over Print Satin Long-Sleeve Pajama Set - Unisex - Knit\",\n            \"name_vi\": \"Áo tank top nữ\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1755224620_sxX1Uz.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Satin Long-Sleeve Pajama Set - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.66,\n            \"created_at\": \"2025-09-06T07:36:21.169Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.276476Z\"\n        },\n        {\n            \"id\": 24,\n            \"sku\": \"ONOS1020\",\n            \"name\": \"All-Over Print Bowling Jersey - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1743558851_0b6L51.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Bowling Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:36:21.15Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.275847Z\"\n        },\n        {\n            \"id\": 23,\n            \"sku\": \"ONOS1019\",\n            \"name\": \"All-Over Print V-Neck Mesh Football Jersey - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1755675066_B8Yb77.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print V-Neck Mesh Football Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:36:21.125Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.275226Z\"\n        },\n        {\n            \"id\": 22,\n            \"sku\": \"ONOS1018\",\n            \"name\": \"All-Over Print Chest Embroidered Logo Men's Polo Shirt\",\n            \"name_vi\": \"Áo polo nam\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1753668409_90tKfp.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Chest Embroidered Logo Men's Polo Shirt\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.91,\n            \"created_at\": \"2025-09-06T07:36:21.099Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.274491Z\"\n        },\n        {\n            \"id\": 21,\n            \"sku\": \"ONOS1017\",\n            \"name\": \"All-Over Print Youth Hawaiian Shorts - Unisex - Knit\",\n            \"name_vi\": \"Bikini\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1752141253_Zmj0m9.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Youth Hawaiian Shorts - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:36:21.073Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.273751Z\"\n        },\n        {\n            \"id\": 20,\n            \"sku\": \"ONOS1016\",\n            \"name\": \"All-over Print Hockey Jersey- 60% cotton, 40% poly - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741859266_MacHop.jpeg\"\n                }\n            ],\n            \"description\": \"All-over Print Hockey Jersey- 60% cotton, 40% poly - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:36:21.048Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.273015Z\"\n        },\n        {\n            \"id\": 19,\n            \"sku\": \"ONOS1015\",\n            \"name\": \"All-Over Print String Bikini - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748833431_c5BqY5.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print String Bikini - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.12,\n            \"created_at\": \"2025-09-06T07:36:21.001Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.272196Z\"\n        },\n        {\n            \"id\": 18,\n            \"sku\": \"ONOS1014\",\n            \"name\": \"Double-Sided Printed Polyester Flag\",\n            \"name_vi\": \"Lá cờ\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750995374_DjHmjK.jpeg\"\n                }\n            ],\n            \"description\": \"Double-Sided Printed Polyester Flag\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.64,\n            \"created_at\": \"2025-09-06T07:36:20.94Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.271447Z\"\n        },\n        {\n            \"id\": 17,\n            \"sku\": \"ONOS1013\",\n            \"name\": \"AOP Men's Polo Shirt with Woven Placket Label\",\n            \"name_vi\": \"Áo polo nam\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1754366112_1kGYen.jpeg\"\n                }\n            ],\n            \"description\": \"AOP Men's Polo Shirt with Woven Placket Label\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.91,\n            \"created_at\": \"2025-09-06T07:36:20.915Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.270831Z\"\n        },\n        {\n            \"id\": 16,\n            \"sku\": \"ONOS1012\",\n            \"name\": \"All-Over Print Basketball V-neck Mesh Shirt - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1754281049_QnHiw8.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Basketball V-neck Mesh Shirt - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.44,\n            \"created_at\": \"2025-09-06T07:36:20.896Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.270275Z\"\n        },\n        {\n            \"id\": 15,\n            \"sku\": \"ONOS1011\",\n            \"name\": \"All-Over Print Basketball Mesh Shirts - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748781629_daVoVB.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Basketball Mesh Shirts - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.44,\n            \"created_at\": \"2025-09-06T07:36:20.873Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.269713Z\"\n        },\n        {\n            \"id\": 3,\n            \"sku\": \"ONOS1010\",\n            \"name\": \"All-Over Print Satin Short-Sleeve Pajama Set with Long Pants - Unisex - Knit\",\n            \"name_vi\": \"Áo tank top nữ\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1752142971_K5gpxK.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Satin Short-Sleeve Pajama Set with Long Pants - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.66,\n            \"created_at\": \"2025-09-06T07:36:20.834Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.260702Z\"\n        },\n        {\n            \"id\": 13,\n            \"sku\": \"ONOS1009\",\n            \"name\": \"All-Over Print Sweatpants 270 GSM - Unisex - Knit\",\n            \"name_vi\": \"Bikini\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748773757_pkDIji.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Sweatpants 270 GSM - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.82,\n            \"created_at\": \"2025-09-06T07:36:20.801Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.268729Z\"\n        },\n        {\n            \"id\": 12,\n            \"sku\": \"ONOS1008\",\n            \"name\": \"Pillow Cover\",\n            \"name_vi\": \"Vỏ gối\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748779757_QQK5xH.jpeg\"\n                }\n            ],\n            \"description\": \"Pillow Cover\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.63,\n            \"created_at\": \"2025-09-06T07:36:20.771Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.268166Z\"\n        },\n        {\n            \"id\": 11,\n            \"sku\": \"ONOS1007\",\n            \"name\": \"All-Over Print Pet Hawaiian Shirt - Unisex - Knit\",\n            \"name_vi\": \"Áo của chó\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741858149_YyXiml.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Pet Hawaiian Shirt - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.5,\n            \"created_at\": \"2025-09-06T07:36:20.741Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.267585Z\"\n        },\n        {\n            \"id\": 10,\n            \"sku\": \"ONOS1006\",\n            \"name\": \"All-Over Print Kids and Youth Baseball Jersey - No Piping - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748780468_zQKCiE.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Kids and Youth Baseball Jersey - No Piping - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.14,\n            \"created_at\": \"2025-09-06T07:36:20.716Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.266166Z\"\n        },\n        {\n            \"id\": 9,\n            \"sku\": \"ONOS1005\",\n            \"name\": \"All-Over Print Youth Sport Mesh Shorts - Unisex - Knit\",\n            \"name_vi\": \"Bikini\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1752140976_qBNXMy.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Youth Sport Mesh Shorts - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.25,\n            \"created_at\": \"2025-09-06T07:36:20.683Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.265083Z\"\n        },\n        {\n            \"id\": 8,\n            \"sku\": \"ONOS1004\",\n            \"name\": \"All-Over Print Unisex T-shirt - Unisex - Knit\",\n            \"name_vi\": \"Áo thun 3D\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741860101_DVhj1Y.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Unisex T-shirt - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.91,\n            \"created_at\": \"2025-09-06T07:36:20.65Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.26416Z\"\n        },\n        {\n            \"id\": 7,\n            \"sku\": \"ONOS1003\",\n            \"name\": \"All-Over Print Embroidered Logo Men's Polo Shirt\",\n            \"name_vi\": \"Áo thun 3D\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1752638848_YZpJxH.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Embroidered Logo Men's Polo Shirt\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.91,\n            \"created_at\": \"2025-09-06T07:36:20.622Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.263273Z\"\n        },\n        {\n            \"id\": 6,\n            \"sku\": \"ONOS1002\",\n            \"name\": \"All-Over Print Chest Embroidered Logo Men's Polo Shirt US Tag\",\n            \"name_vi\": \"Áo thun 3D\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1754540749_gCmqdP.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Chest Embroidered Logo Men's Polo Shirt US Tag\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.84,\n            \"created_at\": \"2025-09-06T07:36:20.597Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.262658Z\"\n        },\n        {\n            \"id\": 5,\n            \"sku\": \"ONOS1001\",\n            \"name\": \"Crop Top Baseball Jersey - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1748783589_wU1Fx6.jpeg\"\n                }\n            ],\n            \"description\": \"Crop Top Baseball Jersey - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.25,\n            \"created_at\": \"2025-09-06T07:36:20.568Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.261986Z\"\n        },\n        {\n            \"id\": 4,\n            \"sku\": \"ONOS1000\",\n            \"name\": \"All-Over Print Baseball Jersey - No Piping - Unisex - Knit\",\n            \"name_vi\": \"\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1741859266_MacHop.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Baseball Jersey - No Piping - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2025-09-06T07:36:20.509Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.261337Z\"\n        },\n        {\n            \"id\": 1,\n            \"sku\": \"ONOS1090\",\n            \"name\": \"All-Over Print Football Jersey Spandex mix Mesh - Unisex - Knit\",\n            \"name_vi\": \"Áo bóng đá lưới\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/app_onospod_com/1750038823_HRSG7m.jpeg\"\n                }\n            ],\n            \"description\": \"All-Over Print Football Jersey Spandex mix Mesh - Unisex - Knit\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 0.91,\n            \"created_at\": \"2024-10-21T02:40:09.402Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.258238Z\"\n        },\n        {\n            \"id\": 2,\n            \"sku\": \"DORMAT\",\n            \"name\": \" Doormat (Fiber/Animal Fur)\",\n            \"name_vi\": \"Thảm cửa\",\n            \"images\": [\n                {\n                    \"src\": \"https://dt5ymcp9sajok.cloudfront.net/onosexpress/items/1718348802_zZDmYp.jpeg\"\n                }\n            ],\n            \"description\": \" Doormat (Fiber/Animal Fur)\",\n            \"estimate_customs_fee\": 0.3,\n            \"estimate_tax\": 1.3,\n            \"created_at\": \"2024-06-14T07:06:42.822Z\",\n            \"updated_at\": \"2025-10-24T07:24:06.259994Z\"\n        }\n    ],\n    \"paginate\": {\n        \"page_size\": 200,\n        \"total_pages\": 1,\n        \"total_items\": 130,\n        \"current_page\": 1\n    }\n}"
+      }
+     ],
+     "_postman_id": "2a96cce1-012c-46e1-91fa-2cd5d04ef21a"
+    }
+   ],
+   "id": "297d461a-c61d-4340-b0c8-d70c5b8ac406",
+   "description": "<p>Retrieve products list created app.onosexpress.com</p>\n",
+   "_postman_id": "297d461a-c61d-4340-b0c8-d70c5b8ac406",
+   "auth": {
+    "type": "bearer",
+    "bearer": {
+     "basicConfig": []
+    },
+    "isInherited": true,
+    "source": {
+     "_postman_id": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+     "id": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+     "name": "Onos Express",
+     "type": "collection"
+    }
+   }
+  },
+  {
+   "name": "SHIPMENT",
+   "item": [
+    {
+     "name": "Create Shipment",
+     "id": "aeae5a97-2cba-4b30-8f31-2a8664f59150",
+     "protocolProfileBehavior": {
+      "disableBodyPruning": true,
+      "disabledSystemHeaders": {
+       "content-type": true
+      }
+     },
+     "request": {
+      "auth": {
+       "type": "bearer",
+       "bearer": {
+        "basicConfig": [
+         {
+          "key": "token",
+          "value": ""
+         }
+        ]
+       },
+       "isInherited": false
+      },
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "body": {
+       "mode": "raw",
+       "raw": "{\n    // 1 order đc xác định là duy nhất với 2 key 'order_id' và 'identifier'.\n    \"order_id\": \"DK-94395-95809\", // required\n    \"identifier\": \"example.com\", // optional\n    \"shipping_info\": {\n        \"full_name\": \"Steven Ginder\", // required\n        \"address_1\": \"26020 Schulley Road\", // required\n        \"address_2\": \"\", // optional\n        \"company\": \"\", // optional\n        \"city\": \"Arcadia\", // required\n        \"state\": \"Indiana\", // required\n        \"postcode\": \"46030\", // required\n        \"country\": \"US\", // required\n        \"email\": \"v4bDJUSDOHGCE25EGXP4CDUZHTW24@scs.tiktokw.us\", // optional\n        \"phone\": \"\"// optional\n    },\n    \"shipping_method\": \"EXPRESS_US\", // accept \"EXPRESS_US\", \"SBTT\"\n    \"items\": [\n        {\n            \"name\": \"KEYCHAIN\", // product name\n            \"product_id\": \"IT-14302-76610\", // product's id created app.onosexpress.com\n            \"sku\": \"KEYCHAIN\", // product's or variant's sku created app.onosexpress.com\n            \"quantity\": 1, // number of product\n            \"price\": 5, // basecost/unit\n            \"currency\": \"USD\"// fixed 'USD'\n        }\n    ],\n    \"custom_width\": 10, // package's width(cm)\n    \"custom_height\": 3, // package's height(cm)\n    \"custom_length\": 5, // package's length(cm)\n    \"custom_weight\": 50, // package's total weight (gram)\n    // \"parcel\" or \"box\", if not set it will be \"parcel\"\n    \"package_type\": \"parcel\"//,\n    // Options: tracking_active_day cannot be used in conjunction with tracking.\n    // \"tracking_active_day\": 3 // business days active picked up tracking. Min 0, max 5\n    //Options: Khi bạn cung cấp tracking + link_print: onos sẽ lấy link_print để tiến hành dán label cho bạn. link_print cần đc download trực tiếp hoặc view dưới dạng in pdf(.pdf link). Required if \"package_type\" equal \"box\"\n    // \"tracking\": {\n    //     \"tracking_number\": \"9400109106029226274196\",\n    //     \"carrier\": \"USPS\",\n    //     \"link_print\": \"https://drive.google.com/file/d/1mV98cr_o-nq7dvw5hxK-GxmTk78RL16T/view\"\n    // },\n    // optional: chỉ sử dụng khi muốn active tracking mà ko ship, chỉ hoạt động với shipping_method: \"SBTT\"\n    // \"active_only\": true\n}"
+      },
+      "url": "https://api-app.onosexpress.com/api/v1/order/create",
+      "urlObject": {
+       "path": [
+        "order",
+        "create"
+       ],
+       "host": [
+        "https://api-app.onosexpress.com/api/v1"
+       ],
+       "query": [],
+       "variable": []
+      }
+     },
+     "response": [],
+     "_postman_id": "aeae5a97-2cba-4b30-8f31-2a8664f59150"
+    },
+    {
+     "name": "Cancel Shipment",
+     "id": "ad2fde5e-f4a9-43be-9649-b14381f00901",
+     "protocolProfileBehavior": {
+      "disableBodyPruning": true
+     },
+     "request": {
+      "auth": {
+       "type": "bearer",
+       "bearer": {
+        "basicConfig": [
+         {
+          "key": "token",
+          "value": ""
+         }
+        ]
+       },
+       "isInherited": false
+      },
+      "method": "DELETE",
+      "header": [],
+      "url": "https://api-app.onosexpress.com/api/v1/order/05-24-11029085",
+      "urlObject": {
+       "path": [
+        "order",
+        "05-24-11029085"
+       ],
+       "host": [
+        "https://api-app.onosexpress.com/api/v1"
+       ],
+       "query": [],
+       "variable": []
+      }
+     },
+     "response": [
+      {
+       "id": "f8b6908d-1cbf-4b0a-84b2-96b30b79256d",
+       "name": "Error",
+       "originalRequest": {
+        "method": "DELETE",
+        "header": [],
+        "url": "https://api-app.onosexpress.com/api/v1/order/05-24-110290851"
+       },
+       "status": "Bad Request",
+       "code": 400,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Length",
+         "value": "92"
+        },
+        {
+         "key": "Content-Type",
+         "value": "application/json; charset=utf-8"
+        },
+        {
+         "key": "Date",
+         "value": "Wed, 22 May 2024 03:29:50 GMT"
+        },
+        {
+         "key": "Rate-Limit-Remaining",
+         "value": "49"
+        },
+        {
+         "key": "Rate-Limit-Reset",
+         "value": "1716348591"
+        },
+        {
+         "key": "Rate-Limit-Total",
+         "value": "50"
+        },
+        {
+         "key": "Set-Cookie",
+         "value": "_uid=63a984f6e575e942105a955c; path=/; httponly"
+        },
+        {
+         "key": "Vary",
+         "value": "Origin"
+        }
+       ],
+       "cookie": [],
+       "responseTime": null,
+       "body": "{\n    \"status\": false,\n    \"error\": \"Order not found\",\n    \"extensions\": {\n        \"code\": \"GRAPHQL_VALIDATION_FAILED\"\n    }\n}"
+      },
+      {
+       "id": "e9dbd3b1-00d2-4499-8140-979795a91e6c",
+       "name": "Success",
+       "originalRequest": {
+        "method": "DELETE",
+        "header": [],
+        "url": "https://api-app.onosexpress.com/api/v1/order/05-24-11029085"
+       },
+       "status": "OK",
+       "code": 200,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Length",
+         "value": "69"
+        },
+        {
+         "key": "Content-Type",
+         "value": "application/json; charset=utf-8"
+        },
+        {
+         "key": "Date",
+         "value": "Wed, 22 May 2024 03:30:11 GMT"
+        },
+        {
+         "key": "Rate-Limit-Remaining",
+         "value": "49"
+        },
+        {
+         "key": "Rate-Limit-Reset",
+         "value": "1716348612"
+        },
+        {
+         "key": "Rate-Limit-Total",
+         "value": "50"
+        },
+        {
+         "key": "Set-Cookie",
+         "value": "_uid=63a984f6e575e942105a955c; path=/; httponly"
+        },
+        {
+         "key": "Vary",
+         "value": "Origin"
+        }
+       ],
+       "cookie": [],
+       "responseTime": null,
+       "body": "{\n    \"status\": true,\n    \"data\": {\n        \"message\": \"Order was cancelled susscessfull\"\n    }\n}"
+      }
+     ],
+     "_postman_id": "ad2fde5e-f4a9-43be-9649-b14381f00901"
+    },
+    {
+     "name": "Get Shipment",
+     "id": "0b3893d9-5c2c-4342-8e54-2963dfbd2814",
+     "protocolProfileBehavior": {
+      "disableBodyPruning": true
+     },
+     "request": {
+      "auth": {
+       "type": "bearer",
+       "bearer": {
+        "basicConfig": [
+         {
+          "key": "token",
+          "value": ""
+         }
+        ]
+       },
+       "isInherited": false
+      },
+      "method": "GET",
+      "header": [],
+      "url": "https://api-app.onosexpress.com/api/v1/order/05-26-10121151",
+      "urlObject": {
+       "path": [
+        "order",
+        "05-26-10121151"
+       ],
+       "host": [
+        "https://api-app.onosexpress.com/api/v1"
+       ],
+       "query": [],
+       "variable": []
+      }
+     },
+     "response": [
+      {
+       "id": "771bdb67-655a-4ebc-a462-76e26536cfb1",
+       "name": "Error",
+       "originalRequest": {
+        "method": "GET",
+        "header": [],
+        "url": "https://api-app.onosexpress.com/api/v1/order/10-23-10655146"
+       },
+       "status": "Not Found",
+       "code": 404,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Length",
+         "value": "42"
+        },
+        {
+         "key": "Content-Type",
+         "value": "application/json; charset=utf-8"
+        },
+        {
+         "key": "Date",
+         "value": "Wed, 22 May 2024 03:30:38 GMT"
+        },
+        {
+         "key": "Rate-Limit-Remaining",
+         "value": "49"
+        },
+        {
+         "key": "Rate-Limit-Reset",
+         "value": "1716348639"
+        },
+        {
+         "key": "Rate-Limit-Total",
+         "value": "50"
+        },
+        {
+         "key": "Set-Cookie",
+         "value": "_uid=63a984f6e575e942105a955c; path=/; httponly"
+        },
+        {
+         "key": "Vary",
+         "value": "Origin"
+        }
+       ],
+       "cookie": [],
+       "responseTime": null,
+       "body": "{\n    \"status\": false,\n    \"error\": \"Order not found\"\n}"
+      },
+      {
+       "id": "cf2727f8-004d-416d-ad39-eaa7f12d3f2f",
+       "name": "Success",
+       "originalRequest": {
+        "method": "GET",
+        "header": [],
+        "url": "https://api-app.onosexpress.com/api/v1/order/05-24-11029082"
+       },
+       "status": "OK",
+       "code": 200,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Length",
+         "value": "1312"
+        },
+        {
+         "key": "Content-Type",
+         "value": "application/json; charset=utf-8"
+        },
+        {
+         "key": "Date",
+         "value": "Wed, 22 May 2024 03:30:56 GMT"
+        },
+        {
+         "key": "Rate-Limit-Remaining",
+         "value": "49"
+        },
+        {
+         "key": "Rate-Limit-Reset",
+         "value": "1716348657"
+        },
+        {
+         "key": "Rate-Limit-Total",
+         "value": "50"
+        },
+        {
+         "key": "Set-Cookie",
+         "value": "_uid=63a984f6e575e942105a955c; path=/; httponly"
+        },
+        {
+         "key": "Vary",
+         "value": "Origin"
+        }
+       ],
+       "cookie": [],
+       "responseTime": null,
+       "body": "{\n    \"status\": true,\n    \"data\": {\n        \"id\": \"05-24-11029082\",\n        \"order_id\": \"#10017\",\n        \"identifier\": \"OnosPOD\",\n        \"status\": \"Ready To Print\",\n        \"shipping_method\": \"EXPRESS\",\n        \"flight_code\": \"JFK\",\n        \"customer_note\": \"\",\n        \"seller_note\": \"\",\n        \"discount_cost\": 0,\n        \"currency\": \"USD\",\n        \"declared_value\": 20,\n        \"total\": 14,\n        \"items\": [\n            {\n                \"name\": \"Custom Shape Wooden Sign (VN)\",\n                \"product_id\": \"IT-95110-42952\",\n                \"sku\": \"PET-HAWAIISHIRT-S\",\n                \"quantity\": 1,\n                \"price\": 20,\n                \"tax\": 0,\n                \"attributes\": [\n                    {\n                        \"name\": \"weight\",\n                        \"option\": 460\n                    },\n                    {\n                        \"name\": \"width\",\n                        \"option\": 15\n                    },\n                    {\n                        \"name\": \"height\",\n                        \"option\": 2\n                    },\n                    {\n                        \"name\": \"length\",\n                        \"option\": 18\n                    }\n                ],\n                \"fulfilment_attributes\": [\n                    {\n                        \"name\": \"Name\",\n                        \"option\": \"Pet Hawaiian Shirt\"\n                    },\n                    {\n                        \"name\": \"Size\",\n                        \"option\": \"S\"\n                    }\n                ]\n            }\n        ],\n        \"tracking\": {\n            \"tracking\": \"420331549234690309268003005357\",\n            \"carrier\": \"USPS\",\n            \"url\": \"https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=420331549234690309268003005357\",\n            \"service\": \"UGA\",\n            \"shipping_label\": {\n                \"url\": \"https://dt5ymcp9sajok.cloudfront.net/labels/05-24-11029082/1716344736.pdf\"\n            }\n        },\n        \"shipping\": {\n            \"full_name\": \"Luis Nzau\",\n            \"address_1\": \"15600 Collins Ave\",\n            \"address_2\": \"Haulover Marine Center\",\n            \"company\": \"\",\n            \"city\": \"Miami Beach\",\n            \"state\": \"FL\",\n            \"postcode\": \"33154\",\n            \"country\": \"US\"\n        },\n        \"refunds\": [],\n        \"shipping_valid\": true,\n        \"created_at\": \"2024-05-22T02:25:32.000Z\",\n        \"updated_at\": \"2024-05-22T02:25:32.000Z\",\n        \"imported_at\": \"2024-05-22T02:25:32.000Z\",\n        \"paid_at\": false\n    }\n}"
+      }
+     ],
+     "_postman_id": "0b3893d9-5c2c-4342-8e54-2963dfbd2814"
+    }
+   ],
+   "id": "77ebbf3c-6bb0-4c5e-af9d-38ba5f4a368a",
+   "description": "<p>Shipment: Create, Cancel, Details</p>\n",
+   "_postman_id": "77ebbf3c-6bb0-4c5e-af9d-38ba5f4a368a",
+   "auth": {
+    "type": "bearer",
+    "bearer": {
+     "basicConfig": []
+    },
+    "isInherited": true,
+    "source": {
+     "_postman_id": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+     "id": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+     "name": "Onos Express",
+     "type": "collection"
+    }
+   }
+  },
+  {
+   "name": "TRACK",
+   "item": [
+    {
+     "name": "Shipment Events",
+     "id": "1b37c19e-011c-45fe-8c2a-cfd982f0d1f6",
+     "protocolProfileBehavior": {
+      "disableBodyPruning": true
+     },
+     "request": {
+      "auth": {
+       "type": "bearer",
+       "bearer": {
+        "basicConfig": [
+         {
+          "key": "token",
+          "value": ""
+         }
+        ]
+       },
+       "isInherited": false
+      },
+      "method": "GET",
+      "header": [],
+      "url": "https://api-app.onosexpress.com/api/v1/order/05-26-10121151/shipment/events",
+      "urlObject": {
+       "path": [
+        "order",
+        "05-26-10121151",
+        "shipment",
+        "events"
+       ],
+       "host": [
+        "https://api-app.onosexpress.com/api/v1"
+       ],
+       "query": [],
+       "variable": []
+      }
+     },
+     "response": [
+      {
+       "id": "bbe68ce1-a9cd-4fa9-9234-8feeee2638b7",
+       "name": "Success",
+       "originalRequest": {
+        "method": "GET",
+        "header": [],
+        "url": "https://api-app.onosexpress.com/api/v1/order/05-24-11028155/shipment/events"
+       },
+       "status": "OK",
+       "code": 200,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Length",
+         "value": "847"
+        },
+        {
+         "key": "Content-Type",
+         "value": "application/json; charset=utf-8"
+        },
+        {
+         "key": "Date",
+         "value": "Wed, 22 May 2024 03:31:56 GMT"
+        },
+        {
+         "key": "Rate-Limit-Remaining",
+         "value": "49"
+        },
+        {
+         "key": "Rate-Limit-Reset",
+         "value": "1716348717"
+        },
+        {
+         "key": "Rate-Limit-Total",
+         "value": "50"
+        },
+        {
+         "key": "Set-Cookie",
+         "value": "_uid=63a984f6e575e942105a955c; path=/; httponly"
+        },
+        {
+         "key": "Vary",
+         "value": "Origin"
+        }
+       ],
+       "cookie": [],
+       "responseTime": null,
+       "body": "{\n    \"status\": true,\n    \"data\": {\n        \"id\": \"05-24-11028155\",\n        \"order_id\": \"PN-06070-88368\",\n        \"status\": \"PRE TRANSIT\",\n        \"tracking_number\": \"420604069214490361178500021304\",\n        \"tracking_carrier\": \"USPS\",\n        \"tracking_url\": \"https://tools.usps.com/go/TrackConfirmAction?tRef=fullpage&tLc=2&text28777=&tLabels=420604069214490361178500021304\",\n        \"shipping_label\": \"https://dt5ymcp9sajok.cloudfront.net/labels/05-24-11028155/1714785681.pdf\",\n        \"events\": [\n            {\n                \"eventId\": \"2iw15twslvvpfzoa\",\n                \"status\": \"PRE TRANSIT\",\n                \"description\": \"Pre-Shipment, USPS Awaiting Item\",\n                \"location\": \"\",\n                \"latitude\": \"\",\n                \"longitude\": \"\",\n                \"datetime\": \"2024-05-03T18:00:00.000Z\"\n            },\n            {\n                \"eventId\": \"lvvpfzom\",\n                \"status\": \"PRE TRANSIT\",\n                \"description\": \"Shipment created\",\n                \"location\": \"Hanoi, VN\",\n                \"latitude\": null,\n                \"longitude\": null,\n                \"datetime\": \"2024-05-04T01:21:19.510Z\"\n            }\n        ],\n        \"created_at\": \"2024-05-04T01:21:22.027Z\",\n        \"updated_at\": \"2024-05-03T18:00:00.000Z\"\n    }\n}"
+      },
+      {
+       "id": "c810dd67-3381-465f-887c-ab618a33b54b",
+       "name": "Error",
+       "originalRequest": {
+        "method": "GET",
+        "header": [],
+        "url": "https://api-app.onosexpress.com/api/v1/order/05-24-110281551/shipment/events"
+       },
+       "status": "Not Found",
+       "code": 404,
+       "_postman_previewlanguage": "json",
+       "header": [
+        {
+         "key": "Content-Length",
+         "value": "42"
+        },
+        {
+         "key": "Content-Type",
+         "value": "application/json; charset=utf-8"
+        },
+        {
+         "key": "Date",
+         "value": "Wed, 22 May 2024 03:32:42 GMT"
+        },
+        {
+         "key": "Rate-Limit-Remaining",
+         "value": "49"
+        },
+        {
+         "key": "Rate-Limit-Reset",
+         "value": "1716348763"
+        },
+        {
+         "key": "Rate-Limit-Total",
+         "value": "50"
+        },
+        {
+         "key": "Set-Cookie",
+         "value": "_uid=63a984f6e575e942105a955c; path=/; httponly"
+        },
+        {
+         "key": "Vary",
+         "value": "Origin"
+        }
+       ],
+       "cookie": [],
+       "responseTime": null,
+       "body": "{\n    \"status\": false,\n    \"error\": \"Order not found\"\n}"
+      }
+     ],
+     "_postman_id": "1b37c19e-011c-45fe-8c2a-cfd982f0d1f6"
+    }
+   ],
+   "id": "e2c9c79e-95db-4589-b358-051ecbbaa534",
+   "_postman_id": "e2c9c79e-95db-4589-b358-051ecbbaa534",
+   "description": "",
+   "auth": {
+    "type": "bearer",
+    "bearer": {
+     "basicConfig": []
+    },
+    "isInherited": true,
+    "source": {
+     "_postman_id": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+     "id": "b799021a-bdff-4b8c-93bf-19999c9fab48",
+     "name": "Onos Express",
+     "type": "collection"
+    }
+   }
+  }
+ ],
+ "auth": {
+  "type": "bearer",
+  "bearer": {
+   "basicConfig": []
+  }
+ },
+ "event": [
+  {
+   "listen": "prerequest",
+   "script": {
+    "id": "7b36095d-09c1-4e02-bf88-83585f5c105a",
+    "type": "text/javascript",
+    "packages": {},
+    "requests": {},
+    "exec": [
+     ""
+    ]
+   }
+  },
+  {
+   "listen": "test",
+   "script": {
+    "id": "77448e52-85cc-4095-baf8-2c2722c13dac",
+    "type": "text/javascript",
+    "packages": {},
+    "requests": {},
+    "exec": [
+     ""
+    ]
+   }
+  }
+ ],
+ "variable": [
+  {
+   "key": "API_URI",
+   "value": ""
+  }
+ ]
+}

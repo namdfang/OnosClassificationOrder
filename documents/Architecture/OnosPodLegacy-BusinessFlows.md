@@ -4,6 +4,8 @@
 >
 > **Độ tin cậy:** phần "Nắm chắc" có số liệu/log chứng minh; phần "Suy ra" ghi rõ; phần "Chưa rõ" liệt kê ở §14 để người vận hành xác nhận.
 >
+> **Bổ sung 08/09/2026:** §7b OnosExpress (hệ vận chuyển riêng của tập đoàn, có API công khai) và §8 công thức giá suy ngược từ 600 đơn thật.
+>
 > **Liên quan:** hệ mới đọc dữ liệu OnosPod ở `apps/api/src/modules/order/onospod-order-lookup.service.ts` (tra đơn), `onospod-import.service.ts` (kéo production `PaginateMrpProduct`), `apps/api/src/modules/product-config/onospod-product-import.service.ts` (kéo sản phẩm). **Hệ mới KHÔNG ghi gì ngược về OnosPod.**
 
 ---
@@ -113,15 +115,59 @@ Ví dụ tiền thật (đơn PQ-22157-83778, DESI, 1 áo baseball jersey): subt
 - Tracking cập nhật bằng cron (`when_tracking_update`, `day_update_tracking`, `active_tracking_day` trên user) + Telegram; shipment `detail[]` lưu lịch sử quét.
 - Nội địa VN: GHTK, địa chỉ `national{province, district, ward}`, COD (có trong affiliate và counter kiện).
 
-## 8. Tiền — luồng đầy đủ (nắm chắc + suy ra)
+## 7b. OnosExpress (`ship.onosexpress.com`) — hệ vận chuyển của tập đoàn (khảo sát chỉ đọc 08/09/2026)
 
-1. Seller nạp tiền (`topup`, PingPong hoặc admin nạp tay ở Billing → Topup có mã giao dịch ngoài + ảnh chứng từ) hoặc dùng **debit** với `debit_limit` (nợ, âm số dư, thanh toán theo hóa đơn kỳ).
-2. Lúc xử lý đơn: trừ `payment` = sale price × qty + phí ship ước + phụ phí; trừ `import_tax` theo `tax_groups` của SKU (Duty 25% + US import tax 16–20% trên **giá trị khai** — công thức chính xác chưa rõ, mẫu: 0,45 $ trên đơn 15,32).
-3. Giảm giá: `discount_vip_total` theo `vip` 0..5 và `partner_vip`, `unit_discounts` theo số lượng, `tiktok_vip_discount`; VIP 3 là mặc định của seller TikTok mới.
-4. Lúc kiện xong: `productionTransaction` = base cost (ghi cho tài khoản sản xuất/xưởng — suy ra dùng để đối soát trả xưởng qua Production Invoice).
-5. Cuối kỳ 10 ngày: Invoice seller gom giao dịch + phí ship thật (fetch lại) → Pending → Paid/Cancelled; file xlsx.
-6. Hoàn tiền: `refund` (dashboard "Latest Refund"), `total_refund` trên đơn, RAR (Return & Replacement) tạo đơn thay thế tham chiếu `replacement`/`return`.
-7. Affiliate: hoa hồng theo đơn vị theo phương thức ship cho người giới thiệu.
+Hệ **riêng, còn source, có API công khai**: Next.js + GraphQL `api.onosexpress.com/graphql` (introspection tắt) + REST `https://api-app.onosexpress.com/api/v1` (tài liệu Postman công khai, bản sao đã lưu ở `documents/Architecture/reference/onosexpress-api.postman.json`). Giới thiệu: "super-fast shipping solution for small package delivery by air from Vietnam to the United States".
+
+**Quy mô:** 76.451 shipment tổng (74.072 processed, 2.379 cancelled); 3 tháng: 67,4 k delivered, 4,8 k in transit, 1,7 k label ready. Dòng tiền tổng: Payment −451 k$ (75 k giao dịch), Import Tax −28 k$, Active −22,5 k$ (32 k lần), Overweight −1,7 k$, Cancel +8,5 k$. 85 user (khách): tài khoản `POD_<seller>` do OnosPod tạo (DEBIT MONTHLY, số dư âm lớn: GODFFM −119 k, POD_ZGLOBAL −71 k, POD_DUC06 −51 k, POD_DESI −50 k…) + fulfillment khác dùng trực tiếp (FOLINASFFM, LENFFM, BEEFUL, Printerval, SHIP GEEK) + tài khoản credit nhỏ. Vai: ADMIN, MANAGER, CUSTOMER.
+
+**Luồng vật lý (nắm chắc từ màn Consolidate/Packages/Boxes):** label USPS sinh ngay khi tạo shipment (`Label Ready`, "Shipping Label Created" tại LONG BEACH CA — địa chỉ gửi ảo ở Mỹ) → xưởng dán label → kiện về kho OnosExpress (Packages: `un_received` 1.465 → `received` → `scanned` → `packaged` 2.101 → `delivered`; `ConfirmPackageWeight` cân lại, phụ phí overweight) → đóng **Box** (barcode, 51 box/tháng) → **Consolidate** hằng ngày 13–16 box, 340–440 kg, 750–1.000 kiện, 5–6,5 k$ (chia Ship By TikTok / Express US) → bay **MAWB** HAN → ICN → LAX → bàn giao USPS tại LAX (ước 2 ngày) → lastmile **Vietnam Post Logistics US (VNPL)** — chính là đối tác VNP eGlobal mà hệ mới đã tích hợp → hóa đơn lastmile nhập theo tháng ("Lastmiles Importer": tháng 7/2026 8.953 kiện, 78,1 k$) và đối soát Short Paid/Refund/Claim ở màn Financial.
+
+**Bảng giá (Pricing, có hiệu lực từ 01/05/2026):** EXPRESS US theo bậc gram: 50 g 6,11 · 100 g 6,55 · 150 g 7,21 · 200 g 7,66 · 230 g 8,59 · 250 g 8,77 · 300 g 9,21 · 400 g 11,41 · 500 g 14,35 · 700 g 16,39 · 1.000 g 20,31 · 2.000 g 32,36 · 5.000 g 67,18 · 10.000 g 140,77 $; có cột VIP 1/2/3 (hiện bằng nhau). SBTT (Ship By TikTok, chỉ kích hoạt/gom): 100 g 1,5 · 200 g 3,0 · 300 g 3,6 · 400 g 4,8 · 500 g 6,0 … 1.000 g 12 $. Ước phí live qua `ParcelRate(weight, dims)` (dim weight = W×H×L/… ; ví dụ 214 g thật, dim 105 g → tính 214 g). Phương thức đang active: `EXPRESS_US` (global, label type UGA), `SBTT`, `SBTT_US`; đã xóa: Express GB, Economy US (CN→US), Express US-US.
+
+**Sản phẩm/Materials:** 176 product (SKU + tên + material) và material có `hts_code`, `estimate_tax`, `estimate_customs_fee` theo nước (US, GB) — nguồn của thuế nhập cố định theo SKU mà OnosPod dùng (0,45 $ jersey, 0,41 $ sweatpants…).
+
+**Tài chính:** ví theo user (credit prepaid / debit monthly), giao dịch có `before_balance`/`after_balance`, loại: Payment, ImportTax, Active, Overweight, Surcharge, Cancel, Refund, Topup, Withdraw, Transfer; hóa đơn tháng cho debit (ví dụ POD_KSTUDIO 08/2026: payment 429,87 + tax 28,13 − cancel 9,04); nạp qua Payoneer/PingPong/LianLian/bank; `AcceptTopUp`/`AcceptWithdraw`/`MarkAsPaidDebit`/`ChargeCustomers`.
+
+**API REST cho đối tác (đủ để hệ mới tự mua label):**
+| Method | Endpoint | Ghi chú |
+|---|---|---|
+| POST | `/api/v1/login` (form email/password) | trả `access_token` Bearer + `refresh_token` + `expired_at`; token cũng lấy ở Account Settings → Tokens |
+| GET | `/api/v1/products/?page_size&page` · `/api/v1/products/materials` | product_id `IT-…`, sku, weight/dims; material sku `ONOS####`, `estimate_tax`, `estimate_customs_fee` |
+| POST | `/api/v1/order/create` | body: `order_id` (+`identifier` = cặp khóa duy nhất), `shipping_info{full_name,address_1,address_2,company,city,state,postcode,country,email,phone}`, `shipping_method` `EXPRESS_US`\|`SBTT`, `items[{name,product_id,sku,quantity,price(basecost),currency:"USD"}]`, `custom_width/height/length` (cm), `custom_weight` (g), `package_type` parcel\|box, tùy chọn `tracking_active_day` 0–5 (không dùng cùng `tracking`), `tracking{tracking_number,carrier,link_print}` (label seller cấp, bắt buộc khi box), `active_only` (SBTT chỉ kích hoạt) |
+| GET | `/api/v1/order/{id}` | trạng thái (`Ready To Print`…), `tracking{tracking,carrier,url,service,shipping_label.url}`, `declared_value`, `total`, `refunds[]`, `shipping_valid` |
+| DELETE | `/api/v1/order/{id}` | hủy |
+| GET | `/api/v1/order/{id}/shipment/events` | lịch sử tracking |
+| Webhook | Developer → Webhooks | tối đa 3 endpoint/tài khoản, POST có chữ ký khi tracking đổi, có lịch sử giao (hiện admin chưa cấu hình endpoint nào) |
+
+GraphQL nội bộ (133 mutation, 80+ query, tên rõ nghĩa: `CreateOrder`, `RequestShipment`, `BulkRequestShipment`, `CancelShipment`, `ParcelRate`, `ConfirmPackageWeight`, `ScanPackage`, `ScanBox`, `PackBox`, `SaveConsolidation`, `ImportLastmile`, `ImportTrackings`, `ChargeCustomers`, `SaveInvoice`, `SwitchUser`, `createWebhook`…) — liệt kê từ JS build, dùng để hiểu nghiệp vụ, không cần gọi.
+
+**Liên kết với OnosPod:** mỗi tài khoản logistics của seller trong OnosPod (`logistics.config{user,password,token,api_url}` với `api_url = https://ship.onosexpress.com`) là một tài khoản `POD_<seller>` bên OnosExpress; OnosPod đăng nhập bằng tài khoản đó rồi gọi `order/create` với `identifier = "OnosPOD"`, `order_id` = mã đơn OnosPod, giá item = base cost; shipment hiện `API` + mã đơn + tên xưởng ("Desi-10 | TH | Tùng") + Merchant Cost. Tracking về OnosPod qua cron gọi `shipment/events`.
+
+## 8. Tiền — luồng đầy đủ và CÔNG THỨC GIÁ (suy ngược từ 600 đơn thật, 08/09/2026)
+
+Kiểm trên 600 đơn Fulfilled/In Production/Completed mới nhất (`p2/price-rows.json` trong scratchpad khảo sát):
+
+| Quy tắc | Khớp | Ghi chú |
+|---|---|---|
+| `subtotal = Σ sale × qty` | 600/600 | `sale` = `print.meta_data.Sale_cost` từng item |
+| `total = subtotal + shipping_price + total_tax − discount_total` | 552/600 | 48 lệch đều là seller DUCVIET (VIP4, SBTT): total thấp hơn 0,70 $ không ghi vào trường discount — cần hỏi |
+| `total_weight = Σ weight × qty` | 600/600 | `weight` khai báo trên biến thể (không phải `actual_weight`) |
+| **Sale = base + markup theo seller** | — | VIP0/partner: +0,50 hoặc +0,60 $/item cố định (DESI, TIKTOKSHOPUS, ZENFFM, BF, SENP, THGPARTNER, MERCHFOXTEAM…); một số dòng +0,00 (TIENHC, sku `R-*`, `PAOPPOLO` — suy ra giá nonship/wholesale); VIP3/VIP4: +4,7…+10,9 $ tùy sản phẩm (= giá bán lẻ `sale_price` của biến thể trừ chiết khấu VIP) |
+| **Thuế nhập = `estimate_tax` cố định theo SKU vật liệu × qty** | ~95% | 0,45 / 0,42 / 0,41 / 0,34 / 0,33 $ — đúng bằng cột "Import US Tax" của Materials bên OnosExpress; = 0 với COD và với ~1/3 đơn ONOSEXPRESS/SBTT (seller tính thuế ở hóa đơn?) |
+| **Ship ONOSEXPRESS = bảng giá EXPRESS US của OnosExpress theo bậc cân nặng** | 43/61 đơn có ship>0 | ví dụ 234 g → bậc 250 g = 8,77 $; 222 g → 8,59 $; lệch còn lại ≤ 0,24 $ (253 g → 8,97 thay vì 9,21) — OnosPod gọi `shipRate` (live `ParcelRate` bên OnosExpress, có tính dim weight) |
+| **Ship SBTT = bậc SBTT của OnosExpress + 0,70 $ kích hoạt USPS** | 19/19 | 155 g → 3,0 + 0,7 = 3,7; 291 g → 3,6 + 0,7 = 4,3 (vài đơn cũ +0,5) |
+| `shipping_price = 0` | 42% đơn ONOSEXPRESS, 98% EXPRESS_US, 100% SHIPEXPRESS/COD/SBTT-thường | Seller **debit** (ship_by_onos) không trả ship lúc đặt — phí ship THẬT được tính vào hóa đơn kỳ (cột "Total actual ship cost", nút "Retry fetch ship cost") |
+| `discount_vip_total` | 91/600 | VIP4: 0,90 $/đơn 1 item (~7% subtotal) |
+| Phương thức | COD 243 · SBTT 174 · ONOSEXPRESS 103 · EXPRESS_US 64 · SHIPEXPRESS 15 | **COD** = seller tự lo vận chuyển hoàn toàn (ship 0, thuế 0, cả US lẫn VN — TIKTOKSHOPUS, ZENFFM, BF); **SBTT** = label TikTok seller cấp, Onos chỉ kích hoạt/quét; **ONOSEXPRESS/EXPRESS_US/SHIPEXPRESS** = Onos mua label USPS qua OnosExpress |
+
+Luồng tiền đầy đủ:
+1. Seller nạp tiền (`topup`, PingPong/Payoneer/LianLian/bank hoặc admin nạp tay có mã giao dịch ngoài + ảnh) hoặc dùng **debit** với `debit_limit` (số dư âm, thanh toán theo hóa đơn kỳ; TIENHC −896 k$, DESI −137 k$).
+2. Lúc xử lý đơn: trừ `payment` = subtotal + ship (nếu prepaid) ; trừ `import_tax` theo SKU; `active` +0,70 $ khi kích hoạt USPS.
+3. Lúc kiện quét xong: `productionTransaction` = **base cost** (5,50 $ ví dụ) — ghi nhận chi phí sản xuất (đối soát trả xưởng qua Production Invoice).
+4. Kỳ 10 ngày: Invoice seller = giao dịch + phí ship thật lấy về từ OnosExpress; Pending → Paid/Cancelled; file xlsx.
+5. OnosPod đồng thời là **khách hàng của OnosExpress** (§7b): mỗi seller có tài khoản `POD_<seller>` bên OnosExpress (debit monthly, `is_pod_customer`), OnosExpress trừ tài khoản đó phí label + thuế nhập (ví dụ đơn PQ-22157-83778: OnosPod thu seller 8,77 + 0,45; OnosExpress tính POD_DESI 8,59 + 0,45 → chênh 0,18 $ là lãi ship của OnosPod).
+6. Hoàn tiền: `refund`, `total_refund`, RAR; Affiliate hoa hồng/đơn vị theo phương thức (COD/ONOSEXPRESS/SBTT, mặc định 0,30 $).
 
 ## 9. Sản phẩm và catalog (nắm chắc)
 
@@ -148,7 +194,7 @@ Tab theo collection: 3D · 2D · Grabink · Embroidery · Dropship · Handmade W
 | Ví, trừ tiền, nợ, hóa đơn kỳ, topup, hoàn tiền, đối soát xưởng | Có, là sổ cái | Chỉ có ledger `customer_payments` ghi `waived` | **Thiếu toàn bộ** — điểm chặn lớn nhất |
 | Gán xưởng | Theo sản phẩm (`manufacture_id`) + tay | Product Config + khách→xưởng | Có |
 | Sản xuất | 6 trạng thái MRP, tài khoản chung theo vai, mã lỗi 31, QC note, priority, merchant group | Soát tool → designer → 6 công đoạn, định danh người, thống kê lỗi theo người, luồng rút gọn theo xưởng | Hệ mới **mạnh hơn**; thiếu **lô sản xuất theo ngày** và "Download Print"/phiếu in theo lô |
-| Label | Mua lúc xử lý đơn (trước SX), USPS qua onosexpress, +0,7 kích hoạt | VNP eGlobal, mua tay từ menu Admin | **Thiếu tự động hóa + chọn thời điểm mua + báo giá + phí ship theo bậc** |
+| Label | Mua lúc xử lý đơn (trước SX) qua **OnosExpress** (REST API công khai §7b), USPS, +0,7 kích hoạt | VNP eGlobal (chính là lastmile của OnosExpress), mua tay từ menu Admin | Hệ mới có thể gọi thẳng OnosExpress `order/create` bằng tài khoản `POD_*` hiện có → giữ nguyên chuỗi HAN→LAX→VNPL; **thiếu tự động hóa + thời điểm mua + báo giá + bảng giá theo bậc** |
 | Đóng kiện | Quét tracking → kiện xong → Fulfilled + trừ tiền SX | Công đoạn Đóng hàng, chưa gắn label/kiện/tiền | **Thiếu hook label + tính tiền lúc đóng** |
 | Bàn giao hãng | Giờ xuất kho + phiếu pickup theo seller | Chưa có | Thiếu lô bàn giao |
 | Tracking | Cron + Telegram + trạng thái shipment 11 mức | Cron VNP 2 lần/ngày, trạng thái 3 mức | Thiếu đổ về seller + webhook `order.shipped` |
@@ -167,9 +213,9 @@ Tab theo collection: 3D · 2D · Grabink · Embroidery · Dropship · Handmade W
 
 ## 14. Chưa rõ — cần người vận hành xác nhận
 
-1. Công thức giá bán cho seller từ 8 loại giá + VIP + partner + unit discount + phụ phí vị trí/mặt in; và công thức thuế nhập (cơ sở tính là giá nào).
+1. Đã suy được phần lớn công thức (§8). Còn hỏi: markup +0,5/+0,6 $ gán theo trường nào của seller (`sale_plan`? `partner_vip`?); VIP3/4 lấy `sale_price` trừ bao nhiêu %; khoản −0,70 $ trên đơn DUCVIET không ghi vào discount; phụ phí vị trí in/mặt in (`side_additional_cost` 3 $, `position_additional_cost` 2 $) áp khi nào (mẫu 600 đơn chỉ 2 đơn in nhiều mặt, markup 4,11 $).
 2. Production Invoice là hóa đơn trả cho xưởng hay hóa đơn sản xuất cho seller debit? Kỳ và ai duyệt.
-3. Ai quyết định phương thức ship khi đơn có nhiều tài khoản logistics; ONOSEXPRESS đi qua hãng nào ở Mỹ (onosexpress.com).
+3. Ai quyết định phương thức ship khi đơn có nhiều tài khoản logistics (COD/SBTT/ONOSEXPRESS). ONOSEXPRESS đã rõ: gom bay HAN→ICN→LAX, bàn giao USPS, lastmile VNPL (§7b).
 4. Lô sản xuất: xưởng dùng để in phiếu cắt/may hay chỉ để đếm tiến độ? Có in "Download Print" theo lô không?
 5. Barcode `O-N-O-S-01..03` là thao tác gì.
 6. Grabink/2D US/Gearment còn dùng không (0 hoạt động 30 ngày).
@@ -178,6 +224,7 @@ Tab theo collection: 3D · 2D · Grabink · Embroidery · Dropship · Handmade W
 
 ## 15. Cách kiểm lại và lưu ý bảo mật
 
-- Script khảo sát (Playwright + fetch GraphQL, chỉ đọc) nằm ở scratchpad phiên làm việc 07/09/2026, **không commit** vì chứa token phiên. Muốn chạy lại: đăng nhập admin, bắt header `authorization` + `x-onos-super-token` từ tab Network, gọi các query ở §11 với `Origin: https://app.onospod.com`.
+- Tài khoản OnosExpress admin dùng khảo sát 08/09/2026 cũng phải đổi mật khẩu; JWT OnosExpress không chứa mật khẩu nhưng token sống dài.
+- Script khảo sát (Playwright + fetch GraphQL, chỉ đọc) nằm ở scratchpad phiên làm việc 07–08/09/2026, **không commit** vì chứa token phiên. Muốn chạy lại: đăng nhập admin, bắt header `authorization` + `x-onos-super-token` từ tab Network, gọi các query ở §11 với `Origin: https://app.onospod.com`.
 - JWT của hệ cũ **chứa mật khẩu dạng rõ** → sau khảo sát phải **đổi mật khẩu** tài khoản đã dùng; không dán token/mật khẩu vào chat, ticket, hay repo.
 - Token super admin đang nằm trong `apps/api/.env.production` (`ONOSPOD_API_*`) để hệ mới đọc; giữ nguyên phạm vi chỉ đọc cho tới khi làm cầu tạm ở §13.1.
