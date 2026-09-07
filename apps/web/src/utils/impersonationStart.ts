@@ -71,6 +71,15 @@ export async function startImpersonation(
   const expiredAt = Date.now() + (data.expiresIn ?? 0) * 1000;
 
   if (kind === 'customer') {
+    // Seller Portal riêng (`apps/seller`, SellerPortal.md §2.3): token đi qua FRAGMENT
+    // (`#token=…`) — không tới server, không lọt access log; trang `/auth/handoff` bên đó
+    // đổi thành cookie httpOnly. Không cấu hình `VITE_SELLER_URL` → vẫn mở `/customer/*` cũ.
+    const sellerUrl = ((import.meta.env.VITE_SELLER_URL as string | undefined) ?? '').replace(/\/+$/, '');
+    if (sellerUrl) {
+      const hash = new URLSearchParams({ token: data.accessToken, exp: String(expiredAt) });
+      window.location.href = `${sellerUrl}/auth/handoff#${hash.toString()}`;
+      return;
+    }
     const store = useCustomerAuthStore.getState();
     store.setToken(data.accessToken);
     store.setTokenExpiredAt(expiredAt);

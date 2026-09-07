@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+/* Token Onos — indigo là điểm nhấn (khớp admin `apps/web` primary #6366F1), tím thương hiệu
+   #6f26c2 (landing onosglobal.com = brand.600) cho nút hành động chính. Kiến trúc @theme + .dark
+   giữ nguyên khuôn thghub để kit `components/shared` chạy không sửa. */
+@theme {
+  /* ── Surface ── */
+  --color-background: #f5f5f8;
+  --color-foreground: #14121f;
+  --color-card: #ffffff;
+  --color-card-hover: #f8f7fc;
+  --color-sidebar: #fbfaff;
+  --color-surface-muted: #f1f0f6;
+  /* ── Text ── */
+  --color-text-primary: #14121f;
+  --color-text-secondary: #55526a;
+  --color-text-muted: #8f8ca3;
+  --color-text-placeholder: #c6c4d4;
+  /* ── Border ── */
+  --color-border1: #e4e2ee;
+  --color-border2: #eeedf5;
+  /* ── Accent — indigo #6366F1 (admin OnosFactory) ── */
+  --color-accent: #6366f1;
+  --color-accent-light: #eef0fd;
+  --color-accent-hover: #4f52d9;
+  /* ── CTA — tím thương hiệu Onos #6f26c2 (chữ trắng đạt 7.6:1) ── */
+  --color-cta: #6f26c2;
+  --color-cta-hover: #5c1ea3;
+  --color-cta-foreground: #ffffff;
+  /* ── Status ── */
+  --color-success: #15803d;
+  --color-success-bg: #f0fdf4;
+  --color-error: #b91c1c;
+  --color-error-bg: #fef2f2;
+  --color-warning: #a16207;
+  --color-warning-bg: #fef3c7;
+  --color-info: #4338ca;
+  --color-info-bg: #eef2ff;
+  /* ── Overlay ── */
+  --color-overlay: rgba(20, 18, 31, 0.35);
+  /* ── Chart ── */
+  --color-chart-1: #6366f1;
+  --color-chart-2: #6f26c2;
+  --color-chart-3: #0e7490;
+  --color-chart-4: #16a34a;
+  --color-chart-5: #b45309;
+  --color-chart-6: #e11d48;
+  --shadow-card: 0 1px 3px rgba(20, 18, 31, 0.08), 0 1px 2px rgba(20, 18, 31, 0.05);
+  --shadow-elevated: 0 6px 16px rgba(20, 18, 31, 0.12), 0 2px 6px rgba(20, 18, 31, 0.08);
+  --radius-dash: 0.9rem;
+  /* ── Fonts (khớp apps/web: Inter body, Lexend Deca tiêu đề) ── */
+  --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
+  --font-display: var(--font-lexend), "Lexend Deca", var(--font-inter), system-ui, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+}
+
+.dark {
+  --color-background: #0f0e15;
+  --color-foreground: #e9e7f1;
+  --color-card: #1a1822;
+  --color-card-hover: #22202c;
+  --color-sidebar: #14121b;
+  --color-surface-muted: #1e1c28;
+  --color-text-primary: #e9e7f1;
+  --color-text-secondary: #a3a0b5;
+  --color-text-muted: #6d6a80;
+  --color-text-placeholder: #4a4859;
+  --color-border1: #2a2836;
+  --color-border2: #222030;
+  --color-accent: #8b8df5;
+  --color-accent-light: #23244a;
+  --color-accent-hover: #a5a7f8;
+  --color-cta: #a56be6;
+  --color-cta-hover: #b98cec;
+  --color-cta-foreground: #14121f;
+  --color-success: #4ade80;
+  --color-success-bg: rgba(21, 128, 61, 0.12);
+  --color-error: #f87171;
+  --color-error-bg: rgba(185, 28, 28, 0.12);
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(161, 98, 7, 0.12);
+  --color-info: #8b8df5;
+  --color-info-bg: rgba(139, 141, 245, 0.12);
+  --color-overlay: rgba(0, 0, 0, 0.6);
+  --color-chart-1: #8b8df5;
+  --color-chart-2: #c39bea;
+  --color-chart-3: #22b8d6;
+  --color-chart-4: #4ade80;
+  --color-chart-5: #fb923c;
+  --color-chart-6: #fb7185;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 6px 16px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #aaa; }
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: #ccc transparent; }
+.dark .scrollbar-thin::-webkit-scrollbar-thumb { background: #555; }
+.dark .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #777; }
+.dark .scrollbar-thin { scrollbar-color: #555 transparent; }
+
+.font-mono-num { font-family: var(--font-mono); letter-spacing: -0.5px; }
+
+.safe-top { padding-top: env(safe-area-inset-top, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.tap-highlight-none { -webkit-tap-highlight-color: transparent; }
+.translate-z-0 { transform: translateZ(0); }
+.mobile-card-press:active { transform: scale(0.98); transition: transform 0.1s ease-out; }
+
+@keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.animate-slide-up { animation: slide-up 0.3s ease-out; }
+.animate-fade-in { animation: fade-in 0.2s ease-out; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
