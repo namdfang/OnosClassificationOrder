@@ -50,7 +50,7 @@ async function fetcher(url: string): Promise<unknown> {
  * change automatically. The parameter is kept to avoid a mass rename.
  */
 export function useApi<T>(url: string | null, _deps: unknown[] = []) {
-  const { data, error, isLoading, mutate } = useSWR<T>(url, fetcher as never);
+  const { data, error, isLoading, mutate } = useSWR<T>(url, fetcher as never, { keepPreviousData: true, dedupingInterval: 5000 });
 
   const refetch = useCallback(() => {
     void mutate();

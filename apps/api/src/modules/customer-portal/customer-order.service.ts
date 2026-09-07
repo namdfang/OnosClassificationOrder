@@ -282,6 +282,7 @@ export class CustomerOrderService implements OnModuleInit {
   // -------------------------------------------------------------------------
 
   async onModuleInit() {
+    this.warmAdminCache();
     const MARKER = 'customer_orders_backfill_v1';
     try {
       const done = await this.systemConfigService.get<string>(MARKER);
@@ -872,33 +873,24 @@ export class CustomerOrderService implements OnModuleInit {
     });
 
     const cutoff = await this.getCompletedCutoff();
-    const pipeline: Record<string, unknown>[] = this.buildDerivePipeline(String(customer._id), cutoff);
-    if (dto.search?.trim()) {
-      const rx = { $regex: escapeRegex(dto.search.trim()), $options: 'i' };
-      pipeline.push({
-        $match: { $or: [{ orderId: rx }, { orderName: rx }, { 'items.productionId': rx }, { 'items.sku': rx }] },
-      });
-    }
-    if (dto.status) pipeline.push({ $match: { statusDerived: dto.status } });
-    if (dto.held) pipeline.push({ $match: { heldAny: true } });
-    // PRD-8 — tab dòng sản phẩm: đơn có ≥1 item thuộc dòng (item đã stamp, hoặc đơn sản xuất đã backfill).
-    if (dto.productLine) {
-      pipeline.push({ $match: { $or: [{ 'items.productLine': dto.productLine }, { 'prodOrders.productLine': dto.productLine }] } });
-    }
-    pipeline.push(
-      { $sort: { sortAt: -1, _id: -1 } },
-      {
-        $facet: {
-          page: [{ $skip: (dto.page - 1) * dto.limit }, { $limit: dto.limit }],
-          total: [{ $count: 'n' }],
-        },
-      },
-    );
+    const search = dto.search?.trim()
+      ? [{ $match: { $or: [{ orderId: { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }, { orderName: { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }, { 'items.productionId': { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }, { 'items.sku': { $regex: escapeRegex(dto.search.trim()), $options: 'i' } }] } }]
+      : [];
+    const pipeline = this.buildPagedListPipeline({
+      customerId: String(customer._id),
+      cutoff,
+      preStages: search,
+      productLine: dto.productLine,
+      status: dto.status,
+      held: !!dto.held,
+      skip: (dto.page - 1) * dto.limit,
+      limit: dto.limit,
+    });
 
     const [res] = await this.customerOrderModel.aggregate<{
       page: Array<Record<string, unknown> & { prodOrders?: ProdDeriveFields[] }>;
       total: Array<{ n: number }>;
-    }>(pipeline as never[]);
+    }>(pipeline as never[], { allowDiskUse: true });
 
     const data = (res?.page ?? []).map((doc) => {
       const prodByPid = new Map<string, ProdDeriveFields>(
@@ -963,10 +955,8 @@ export class CustomerOrderService implements OnModuleInit {
     productLine?: ProductLine,
     extraStages: Record<string, unknown>[] = [],
   ): [Record<string, unknown>[], Record<string, unknown>[]] {
-    const lineMatch: Record<string, unknown>[] = [
-      ...extraStages,
-      ...(productLine ? [{ $match: { $or: [{ 'items.productLine': productLine }, { 'prodOrders.productLine': productLine }] } }] : []),
-    ];
+    // Cùng luật với listing: chỉ `items.productLine` (đã stamp/backfill) — không fallback `prodOrders`, kẻo tab đếm lệch danh sách.
+    const lineMatch: Record<string, unknown>[] = [...extraStages, ...(productLine ? [{ $match: { 'items.productLine': productLine } }] : [])];
     const byStatus = [
       ...this.buildDerivePipeline(customerId, cutoff),
       ...lineMatch,
@@ -982,7 +972,7 @@ export class CustomerOrderService implements OnModuleInit {
     const byLine = [
       ...this.buildDerivePipeline(customerId, cutoff),
       ...lineMatch,
-      { $project: { lines: { $setUnion: [{ $ifNull: ['$items.productLine', []] }, { $ifNull: ['$prodOrders.productLine', []] }] } } },
+      { $project: { lines: { $setUnion: [{ $ifNull: ['$items.productLine', []] }, []] } } },
       { $unwind: '$lines' },
       { $match: { lines: { $in: PRODUCT_LINES } } },
       { $group: { _id: '$lines', count: { $sum: 1 } } },
@@ -995,6 +985,106 @@ export class CustomerOrderService implements OnModuleInit {
   // đơn staging của MỌI seller. CHỈ ĐỌC: mọi thao tác trên đơn khách vẫn đi
   // qua mạo danh (token khách) để giữ nguyên rào + audit sẵn có.
   // -------------------------------------------------------------------------
+
+  /**
+   * Pipeline phân trang dùng chung khách + admin. Hai đường:
+   * - **Nhanh** (không lọc trạng thái/held/chặng): lọc mức document (khách, ngày, tìm, `items.productLine`),
+   *   sắp xếp + cắt trang TRƯỚC, rồi mới `$lookup` đơn sản xuất cho đúng `limit` dòng → ~0,1 s thay vì 6 s
+   *   (trước đây `$lookup` cho toàn bộ 38k đơn staging rồi mới cắt trang — SellerPortal.md §9.2).
+   * - **Đầy đủ** (có `status`/`held`/`stage`): trạng thái dẫn xuất cần `prodOrders` → derive trên tập đã lọc
+   *   mức document (vẫn nặng nhưng nhỏ hơn nhờ lọc trước).
+   * `productLine` chỉ dùng `items.productLine` (đã stamp/backfill PRD-8); không còn fallback `prodOrders.productLine`.
+   */
+  private buildPagedListPipeline(opts: {
+    customerId: string | null;
+    cutoff: Date;
+    preStages: Record<string, unknown>[];
+    productLine?: ProductLine;
+    status?: CustomerOrderStatus;
+    held: boolean;
+    postDeriveStages?: Record<string, unknown>[];
+    pageTail?: Record<string, unknown>[];
+    skip: number;
+    limit: number;
+  }): Record<string, unknown>[] {
+    const docMatch: Record<string, unknown>[] = [
+      ...(opts.customerId ? [{ $match: { customerId: opts.customerId } }] : []),
+      ...opts.preStages,
+      ...(opts.productLine ? [{ $match: { 'items.productLine': opts.productLine } }] : []),
+    ];
+    const sortStages = [{ $addFields: { sortAt: { $ifNull: ['$pushedAt', '$createdAt'] } } }, { $sort: { sortAt: -1, _id: -1 } }];
+    const derive = this.buildDerivePipeline(null, opts.cutoff);
+    // `pending` suy được ở mức document (mirror `statusDerived`: chưa hủy, chưa hoàn tiền, chưa push) → đường nhanh.
+    if (opts.status === CustomerOrderStatus.Pending) {
+      docMatch.push({ $match: { status: { $ne: 'cancelled' }, refundedAt: null, pushedAt: null } });
+    }
+    const needsDerive = (!!opts.status && opts.status !== CustomerOrderStatus.Pending) || opts.held || (opts.postDeriveStages?.length ?? 0) > 0;
+    if (!needsDerive) {
+      return [
+        ...docMatch,
+        ...sortStages,
+        {
+          $facet: {
+            page: [{ $skip: opts.skip }, { $limit: opts.limit }, ...derive, ...(opts.pageTail ?? [])],
+            total: [{ $count: 'n' }],
+          },
+        },
+      ];
+    }
+    return [
+      ...docMatch,
+      ...derive,
+      ...(opts.status ? [{ $match: { statusDerived: opts.status } }] : []),
+      ...(opts.held ? [{ $match: { heldAny: true } }] : []),
+      ...(opts.postDeriveStages ?? []),
+      ...sortStages,
+      {
+        $facet: {
+          page: [{ $skip: opts.skip }, { $limit: opts.limit }, ...(opts.pageTail ?? [])],
+          total: [{ $count: 'n' }],
+        },
+      },
+    ];
+  }
+
+  /** Cache ngắn (60 s) cho số đếm/thống kê khu quản trị — quét toàn bộ staging mỗi lần gọi mất ~5 s. */
+  /**
+   * Cache bộ nhớ cho số liệu admin (counts/stats — quét cả `customer_orders` ≈ 5 s).
+   * Kiểu stale-while-revalidate: còn hạn → trả ngay; hết hạn nhưng có bản cũ → trả bản cũ + tính lại NỀN;
+   * chưa có → chờ tính (1 lần, các request trùng key dùng chung promise). Admin F5 không bao giờ chờ 5 s lần 2.
+   */
+  private readonly adminCache = new Map<string, { at: number; value: unknown }>();
+  private readonly adminInflight = new Map<string, Promise<unknown>>();
+  private static readonly ADMIN_CACHE_MS = 60_000;
+  private async cachedAdmin<T>(key: string, load: () => Promise<T>): Promise<T> {
+    const hit = this.adminCache.get(key);
+    const fresh = !!hit && Date.now() - hit.at < CustomerOrderService.ADMIN_CACHE_MS;
+    if (fresh) return hit.value as T;
+    let inflight = this.adminInflight.get(key) as Promise<T> | undefined;
+    if (!inflight) {
+      inflight = load()
+        .then((value) => {
+          this.adminCache.set(key, { at: Date.now(), value });
+          return value;
+        })
+        .finally(() => this.adminInflight.delete(key));
+      this.adminInflight.set(key, inflight);
+    }
+    if (hit) {
+      inflight.catch(() => undefined); // bản cũ vẫn trả được; lỗi tính nền chỉ ghi log ở load()
+      return hit.value as T;
+    }
+    return inflight;
+  }
+
+  /** Làm ấm cache admin sau khi boot (trang `/hub/orders` mở lần đầu không phải chờ counts/stats ≈ 5 s). */
+  private warmAdminCache() {
+    if (process.env.NODE_ENV === 'test') return;
+    setTimeout(() => {
+      void this.getCountsAdmin({}).catch(() => undefined);
+      void this.getStatsAdmin().catch(() => undefined);
+    }, 10_000).unref();
+  }
 
   /** `$match` khoảng ngày theo `pushedAt ?? createdAt` (giờ VN, cả ngày `dateTo`). Rỗng → []. */
   private static dateRangeStages(dateFrom?: string, dateTo?: string): Record<string, unknown>[] {
@@ -1107,58 +1197,58 @@ export class CustomerOrderService implements OnModuleInit {
 
   async listOrdersAdmin(dto: GetAdminCustomerOrdersDto): Promise<GetAdminCustomerOrdersResDto> {
     const cutoff = await this.getCompletedCutoff();
-    const pipeline: Record<string, unknown>[] = [
-      ...this.buildDerivePipeline(dto.customerId ?? null, cutoff),
-      ...CustomerOrderService.dateRangeStages(dto.dateFrom, dto.dateTo),
-    ];
+    const preStages: Record<string, unknown>[] = [...CustomerOrderService.dateRangeStages(dto.dateFrom, dto.dateTo)];
     if (dto.search?.trim()) {
       const rx = { $regex: escapeRegex(dto.search.trim()), $options: 'i' };
-      pipeline.push({ $match: { $or: [{ orderId: rx }, { orderName: rx }, { 'items.productionId': rx }, { 'items.sku': rx }, { userSku: rx }, { userEmail: rx }] } });
+      preStages.push({ $match: { $or: [{ orderId: rx }, { orderName: rx }, { 'items.productionId': rx }, { 'items.sku': rx }, { userSku: rx }, { userEmail: rx }] } });
     }
-    if (dto.status) pipeline.push({ $match: { statusDerived: dto.status } });
-    if (dto.held) pipeline.push({ $match: { heldAny: true } });
-    if (dto.productLine) {
-      pipeline.push({ $match: { $or: [{ 'items.productLine': dto.productLine }, { 'prodOrders.productLine': dto.productLine }] } });
-    }
-    if (dto.stage) {
-      // Chặng hiện tại của từng đơn sản xuất (cùng luật `workshopStageSwitchExpr` với trang xưởng + CEO).
-      pipeline.push({
-        $match: {
-          $expr: {
-            $in: [
-              dto.stage,
-              {
-                $map: {
-                  input: { $filter: { input: '$prodOrders', as: 'p', cond: { $eq: [{ $ifNull: ['$$p.cancelledAt', null] }, null] } } },
-                  as: 'p',
-                  in: workshopStageSwitchExpr('$$p.'),
-                },
+    const stageStage: Record<string, unknown>[] = dto.stage
+      ? [
+          {
+            // Chặng hiện tại của từng đơn sản xuất (cùng luật `workshopStageSwitchExpr` với trang xưởng + CEO).
+            $match: {
+              $expr: {
+                $in: [
+                  dto.stage,
+                  {
+                    $map: {
+                      input: { $filter: { input: '$prodOrders', as: 'p', cond: { $eq: [{ $ifNull: ['$$p.cancelledAt', null] }, null] } } },
+                      as: 'p',
+                      in: workshopStageSwitchExpr('$$p.'),
+                    },
+                  },
+                ],
               },
-            ],
+            },
           },
-        },
-      });
-    }
-    pipeline.push(
-      { $addFields: { sortAt: { $ifNull: ['$pushedAt', '$createdAt'] } } },
-      { $sort: { sortAt: -1, _id: -1 } },
-      {
-        $facet: {
-          page: [{ $skip: (dto.page - 1) * dto.limit }, { $limit: dto.limit }, ...CustomerOrderService.CUSTOMER_LOOKUP],
-          total: [{ $count: 'n' }],
-        },
-      },
-    );
+        ]
+      : [];
+    const pipeline = this.buildPagedListPipeline({
+      customerId: dto.customerId ?? null,
+      cutoff,
+      preStages,
+      productLine: dto.productLine,
+      status: dto.status,
+      held: !!dto.held,
+      postDeriveStages: stageStage,
+      pageTail: CustomerOrderService.CUSTOMER_LOOKUP,
+      skip: (dto.page - 1) * dto.limit,
+      limit: dto.limit,
+    });
     const [res] = await this.customerOrderModel.aggregate<{
       page: Array<Record<string, unknown> & { prodOrders?: ProdDeriveFields[]; customer?: Record<string, unknown> }>;
       total: Array<{ n: number }>;
-    }>(pipeline as never[]);
+    }>(pipeline as never[], { allowDiskUse: true });
     const rows = res?.page ?? [];
     const refs = await this.loadAdminRefs(rows);
     return { success: true, data: rows.map((d) => this.toAdminStagingOrder(d, cutoff, refs)), total: res?.total?.[0]?.n ?? 0 };
   }
 
   async getCountsAdmin(dto: GetAdminCustomerOrderCountsDto): Promise<GetCustomerOrderCountsResDto> {
+    return this.cachedAdmin(`counts:${JSON.stringify(dto)}`, () => this.computeCountsAdmin(dto));
+  }
+
+  private async computeCountsAdmin(dto: GetAdminCustomerOrderCountsDto): Promise<GetCustomerOrderCountsResDto> {
     const cutoff = await this.getCompletedCutoff();
     const [byStatus, byLine] = this.countsPipelines(dto.customerId ?? null, cutoff, dto.productLine, CustomerOrderService.dateRangeStages(dto.dateFrom, dto.dateTo));
     const [rows, lineRows] = await Promise.all([
@@ -1169,6 +1259,10 @@ export class CustomerOrderService implements OnModuleInit {
   }
 
   async getStatsAdmin(): Promise<GetAdminCustomerOrderStatsResDto> {
+    return this.cachedAdmin('stats', () => this.computeStatsAdmin());
+  }
+
+  private async computeStatsAdmin(): Promise<GetAdminCustomerOrderStatsResDto> {
     const cutoff = await this.getCompletedCutoff();
     const [byStatus, byLine] = this.countsPipelines(null, cutoff);
     const sellerPipeline = [

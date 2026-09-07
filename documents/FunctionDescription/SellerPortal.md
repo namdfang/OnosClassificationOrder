@@ -185,7 +185,30 @@ Thao tác (gán designer, đổi xưởng, báo lỗi) vẫn ở app xưởng: n
 
 **BE mới (chỉ đọc):** `apps/api/src/modules/customer-portal/customer-order-admin.controller.ts` — `GET admin/customer-orders` (+`/counts`, `/stats`), `@Auth([Admin])` (SuperAdmin qua guard); prefix `admin/...` cố ý không chứa `/customer/` nên token khách bị `RolesGuard` chặn (đã kiểm: 403). Service: `buildDerivePipeline(customerId | null)` — null = không scope khách; `assembleCounts`/`countsPipelines` tách từ `getCounts`; `listOrdersAdmin` (+ `$lookup customers` → `customer{userSku,userEmail,fullName,tier}`), `getCountsAdmin`, `getStatsAdmin` (group theo `customerId`, top 10, `$facet` đếm seller). DTO `AdminCustomerStagingOrderZod`/`GetAdminCustomerOrdersZod`/`AdminCustomerOrderStatsZod` ở `customer-order.dto.ts`. Import enum trong file API phải từ `'shared'` (KHÔNG `@shared/enums` — alias nguồn không tồn tại sau build, API dev sập `Cannot find module`).
 
-Đo dev (07/09/2026): 125 seller có đơn, 38.095 đơn staging; `stats` ≈ 1,5 s (3 aggregate song song trên `customer_orders` + `$lookup orders`), list 20 dòng < 1 s.
+Đo dev (07/09/2026): 125 seller có đơn, 38.095 đơn staging. Hiệu năng tải trang `/hub/orders*` xem §9.2.
+
+### 9.2 Hiệu năng tải `/hub/orders*` (F5, 07/09/2026)
+
+Trước tối ưu, F5 `/hub/orders` chờ ~6 s: `admin/customer-orders` 6,3 s + `counts` 5 s (×2, cho tab + pill) + `stats` 5,4 s — nguyên nhân là `$lookup orders` + derive trạng thái chạy trên CẢ 38k document staging rồi mới phân trang.
+
+Đã sửa ở `apps/api/src/modules/customer-portal/customer-order.service.ts`:
+
+- **`buildPagedListPipeline()`** (dùng chung `listOrders` khách + `listOrdersAdmin`): lọc mức document trước (`customerId`, khoảng ngày, `items.productLine`, tìm kiếm) → sort `pushedAt ?? createdAt` → `$facet` **phân trang TRƯỚC**, chỉ `$lookup`/derive cho 20 dòng của trang. Đường nhanh này áp khi KHÔNG lọc trạng thái/giữ/chặng; riêng `status=pending` suy được ở mức document (`status≠cancelled`, `refundedAt=null`, `pushedAt=null`, mirror `statusDerived`) nên cũng đi đường nhanh. Lọc `status` khác / `held` / `stage` vẫn phải derive toàn bộ rồi mới sort + phân trang (đường đầy đủ). Mọi aggregate bật `allowDiskUse`.
+- **Cache admin 60 s** cho `getCountsAdmin`/`getStatsAdmin` (`cachedAdmin()` — stale-while-revalidate: hết hạn vẫn trả bản cũ và tính lại nền, request trùng key dùng chung 1 promise; `warmAdminCache()` làm ấm `counts:{}` + `stats` 10 s sau boot). Số tab/pill trễ tối đa 60 s so với DB — chấp nhận được cho màn quản trị.
+- Đếm theo dòng dùng CÙNG luật với danh sách: chỉ `items.productLine` (không fallback `prodOrders.productLine`) — trước đây tab 3D đếm 37.179 mà danh sách 37.004 vì 178 staging cũ thiếu `items.productLine` (đã backfill trên dev từ `orders.productLine`; prod chạy lại cùng lệnh mongosh khi deploy).
+- FE `hooks/use-api.ts`: SWR `keepPreviousData` + `dedupingInterval` 5 s — đổi tab/trang giữ bảng cũ tới khi có dữ liệu mới, không nháy trắng.
+
+| Gọi | Trước | Sau |
+|---|---|---|
+| `admin/customer-orders?page=1&limit=20` (38.095) | 6,3 s | 0,09 s |
+| … `&productLine=3d` (37.180) | ~6 s | 0,09 s |
+| … `&status=pending` | ~6 s | 0,01 s |
+| … `&status=in-production` / `&stage=print` | ~6 s | 4,6 s (đường đầy đủ) |
+| `admin/customer-orders/counts` | 5,0 s | 5,0 s lần đầu sau boot (đã làm ấm) → 0,005 s |
+| `admin/customer-orders/stats` | 5,4 s | 5,4 s lần đầu → 0,006 s |
+| `customer/orders` (seller, ~4,9k đơn) | ~1 s | 0,15 s |
+
+Còn chậm (chưa làm): lọc `status`/`held`/`stage` và tính lại counts/stats nền vẫn ≈ 5 s vì phải derive toàn bộ. Hướng cấu trúc nếu cần: ghi **snapshot trạng thái** (`statusSnapshot`/`stageSnapshot`) lên document staging khi push/transition + cron đồng bộ, rồi lọc/đếm bằng index — khi đó mọi đường về < 0,2 s.
 
 ## 8. Vận hành & hạ tầng (PR-D)
 
