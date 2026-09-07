@@ -161,3 +161,5 @@ nginx bằng POST** (`/api/v1/auth/login` → 422 JSON), đừng nhìn `GET /api
 |---|---|---|
 | SuperAdmin, Admin | có | `owner` — thấy mọi hội thoại |
 | Còn lại | không (không có entry sidebar, `POST session` trả 403) | — |
+
+> **CSS của gói UI (07/09/2026 — sự cố prod avatar phình to cả màn):** `@zero-126/zalo-ui` là JSX đã build mang sẵn class Tailwind (`size-10`, `rounded-full`, `shrink-0`…) nhưng KHÔNG kèm CSS tiện ích — chỉ có `theme.css` (12 slot `--zalo-*`). App chủ phải cho Tailwind quét dist của gói: `apps/web/tailwind.config.js` `content` thêm `./node_modules/@zero-126/zalo-ui/dist/**/*.js` (thghub làm bằng `@source` của Tailwind 4). Thiếu dòng này thì lớp nào `src/` không tình cờ dùng sẽ không được sinh → avatar không có kích thước, nút mất bo góc. Gói viết cho Tailwind 4 nên 4 tiện ích v4 (`shadow-xs`/`rounded-xs`/`outline-hidden`/`field-sizing-content`) được khai lại bằng plugin `addUtilities` trong cùng file. Kiểm sau build: `grep -c '\.size-10' apps/web/dist/assets/index-*.css` phải ≥ 1 (bundle chính tăng ≈ 123 → 163 KB).

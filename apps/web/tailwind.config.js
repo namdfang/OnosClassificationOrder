@@ -1,7 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ['class'],
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // `@zero-126/zalo-ui` (trang /adm/zalo) là dist JSX mang sẵn class Tailwind (size-10, rounded-full…)
+  // nhưng KHÔNG kèm CSS — phải cho Tailwind quét dist của gói, không thì avatar/nút mất kích thước
+  // (prod 07/09/2026: avatar phình to cả màn). thghub làm bằng `@source` của Tailwind 4.
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}', './node_modules/@zero-126/zalo-ui/dist/**/*.js'],
   theme: {
     container: {
       center: true,
@@ -111,5 +114,15 @@ export default {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [
+    require('tailwindcss-animate'),
+    // Gói zalo-ui viết cho Tailwind 4: 4 tiện ích dưới đây không có ở v3 → khai bằng tên v4, giá trị tương đương v3.
+    ({ addUtilities }) =>
+      addUtilities({
+        '.shadow-xs': { 'box-shadow': '0 1px 2px 0 rgb(0 0 0 / 0.05)' },
+        '.rounded-xs': { 'border-radius': '0.125rem' },
+        '.outline-hidden': { outline: '2px solid transparent', 'outline-offset': '2px' },
+        '.field-sizing-content': { 'field-sizing': 'content' },
+      }),
+  ],
 };
