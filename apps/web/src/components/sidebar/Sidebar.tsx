@@ -591,13 +591,15 @@ function buildNavGroups(t: TFunction<'layout'>, factoryScopeId?: string): NavGro
         },
         {
           // Màn chat Zalo nhúng (module của nhà cung cấp). Cố ý KHÔNG gắn mã
-          // quyền: engine cho vai owner thấy MỌI hội thoại của mọi nick, nên đợt
-          // đầu khoá cứng theo vai trò thay vì để ma trận quyền mở nhầm.
+          // quyền của hệ mình: phân quyền nằm ở dialog "Phân quyền" của engine
+          // (rule theo role/scope + cấp lẻ từng người). Admin vào là `owner`
+          // thấy mọi hội thoại; nhân sự khác vào là `member` và KHÔNG thấy gì
+          // cho tới khi được rule/grant — nên để menu mở cho mọi nhân sự
+          // (08/09/2026, trước đó khoá cứng Admin nên rule bên engine vô dụng).
           key: PATHS.ZALO_CHAT,
           label: t('sidebar.zaloChat'),
           to: PATHS.ZALO_CHAT,
           icon: <MessagesSquare size={17} />,
-          onlyForRoles: [RoleType.SuperAdmin, RoleType.Admin],
         },
         {
           key: PATHS.SETTINGS,

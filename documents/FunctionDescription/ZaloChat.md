@@ -163,3 +163,18 @@ nginx bằng POST** (`/api/v1/auth/login` → 422 JSON), đừng nhìn `GET /api
 | Còn lại | không (không có entry sidebar, `POST session` trả 403) | — |
 
 > **CSS của gói UI (07/09/2026 — sự cố prod avatar phình to cả màn):** `@zero-126/zalo-ui` là JSX đã build mang sẵn class Tailwind (`size-10`, `rounded-full`, `shrink-0`…) nhưng KHÔNG kèm CSS tiện ích — chỉ có `theme.css` (12 slot `--zalo-*`). App chủ phải cho Tailwind quét dist của gói: `apps/web/tailwind.config.js` `content` thêm `./node_modules/@zero-126/zalo-ui/dist/**/*.js` (thghub làm bằng `@source` của Tailwind 4). Thiếu dòng này thì lớp nào `src/` không tình cờ dùng sẽ không được sinh → avatar không có kích thước, nút mất bo góc. Gói viết cho Tailwind 4 nên 4 tiện ích v4 (`shadow-xs`/`rounded-xs`/`outline-hidden`/`field-sizing-content`) được khai lại bằng plugin `addUtilities` trong cùng file. Kiểm sau build: `grep -c '\.size-10' apps/web/dist/assets/index-*.css` phải ≥ 1 (bundle chính tăng ≈ 123 → 163 KB).
+
+## Phân quyền — danh bạ & phạm vi (sửa 08/09/2026)
+
+Ops báo dialog "Phân quyền" của nhà cung cấp không khớp được role/user bên Onos: phần "Cấp lẻ từng người" luôn báo *"Không có user nào trong role này"*, rule "Match scope"/"Theo scope của user" không khớp ai. Nguyên nhân **hoàn toàn ở phía mình**, ba chỗ:
+
+| Triệu chứng | Nguyên nhân | Sửa |
+|---|---|---|
+| Không liệt kê được người để cấp quyền lẻ; ô scope không gợi ý | `ZaloProxyOptions.listUsers` **chưa khai** → proxy trả `[]` cho `GET /api/zalo-multi/directory` (SDK: "Không khai → endpoint trả []") | `ZaloChatService.danhBa()` trả `DirectoryUser[]` (nhân sự `status=1`, chưa xoá) — id, tên, tier, `roleLabel` = tên role hệ thống, `scopes`, email, phòng ban. Dữ liệu phục vụ TẠI app, KHÔNG forward sang engine |
+| Rule theo scope không khớp ai | `docPhien()` luôn trả `scopes: []` | Cookie phiên mang thêm `nhan` (roleLabel) + `pv` (scopes); `phamVi()` dựng chuỗi **`role:<Tên role>` · `dept:<mã phòng ban>` · `factory:<mã xưởng>`** — tiền tố cố định để engine so chuỗi và autocomplete gom nhóm được |
+| Cấp quyền cho người ngoài Admin xong họ vẫn không vào được | `vaiTro()` trả `null` cho mọi role khác Admin, controller `@Auth([SuperAdmin, Admin])`, sidebar `onlyForRoles` — không ai ngoài Admin lấy được phiên | SuperAdmin/Admin → `owner` (thấy mọi hội thoại) như cũ; **nhân sự khác → `member`**, controller đổi thành `@Auth([])`, bỏ `onlyForRoles` ở sidebar. Member KHÔNG thấy gì cho tới khi có rule/grant bên engine — đúng mô hình của nhà cung cấp |
+
+Kiểm 08/09/2026 trên dev: `GET /api/zalo-multi/directory` trả **38 nhân sự** kèm scope thật (`role:Support`, `role:Fulfillment` + `factory:ML`, `role:Designer`…); tab "Ma trận quyền" trong Cài đặt Zalo gọi `/directory` 200 (dev chưa nối nick Zalo nào nên bảng còn trống).
+
+**Lưu ý dữ liệu:** hiện KHÔNG nhân sự nào có `departmentId` (48/48 trống trên dev) nên chưa có scope `dept:*`. Muốn dùng rule theo phòng ban thì phải gán phòng ban cho nhân sự ở `/adm/departments` trước.
+

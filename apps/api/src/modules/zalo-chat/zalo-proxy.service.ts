@@ -46,6 +46,10 @@ export class ZaloProxyService implements OnModuleInit {
       engineUrl: url,
       engineSecret: secret,
       getUser: (req) => this.chatService.docPhien(req.headers.get('cookie') ?? undefined),
+      // Danh bạ nhân sự cho dialog "Phân quyền" (proxy phục vụ tại app, không
+      // forward sang engine). Thiếu callback này thì endpoint trả [] và dialog
+      // báo "Không có user nào trong role này" — lỗi ops báo 08/09/2026.
+      listUsers: () => this.chatService.danhBa(),
     };
     this.rest = createZaloProxyHandler(opts) as unknown as Record<string, Handler>;
     this.socket = createZaloSocketProxyHandler(opts) as unknown as Record<string, Handler>;

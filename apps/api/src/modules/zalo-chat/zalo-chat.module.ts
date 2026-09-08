@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
 
 import { AuthModule } from '../auth/auth.module';
+import { UserEntity, UserSchema } from '../user/user.entity';
 import { ZaloChatController } from './zalo-chat.controller';
 import { ZaloChatService } from './zalo-chat.service';
 import { ZaloProxyService } from './zalo-proxy.service';
@@ -13,7 +15,7 @@ import { ZaloProxyService } from './zalo-proxy.service';
  * không có entity, không ghi gì vào Mongo.
  */
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, MongooseModule.forFeature([{ name: UserEntity.name, schema: UserSchema }])],
   controllers: [ZaloChatController],
   providers: [ZaloChatService, ZaloProxyService],
   exports: [ZaloChatService],
