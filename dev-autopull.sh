@@ -5,10 +5,13 @@
 #
 # Vì sao có (08/09/2026): dev server chạy ba service ở chế độ tự nạp lại
 # (`onos-api-dev` nodemon, `onos-web-dev` vite, `onos-seller-dev` next dev) trên
-# đúng MỘT cây làm việc ở /root/.vibedev/repos/onos. Ai muốn thử code trên dev
-# đều phải nhờ người có quyền vào máy `git pull` hộ. Script này chạy theo hẹn
-# giờ: có commit mới trên nhánh theo dõi thì kéo về, và chỉ làm thêm việc khi
-# thật sự cần.
+# một cây làm việc RIÊNG `/root/onos-dev` — cây này KHÔNG ai ngồi sửa, chỉ script
+# này đụng vào, nên nó luôn đúng bằng nhánh `dev` trên GitHub. Ai muốn thử code
+# trên dev chỉ cần merge vào `dev`, không cần SSH. Script chạy theo hẹn giờ: có
+# commit mới thì kéo về, và chỉ làm thêm việc khi thật sự cần.
+#
+# Cây `/root/.vibedev/repos/onos` là chỗ làm việc tay, chạy bộ service
+# `onos-*-wip` ở cổng 3008/5174/3018 và KHÔNG bao giờ bị script này kéo.
 #
 # Ba nguyên tắc AN TOÀN, đừng bỏ:
 #  1. **Chỉ đi thẳng** (`merge --ff-only`). Nhánh trên máy dev lệch khỏi remote
@@ -29,11 +32,14 @@
 # repo, vì script nằm trong repo tự sửa chính mình giữa lúc đang chạy.
 set -u
 
-REPO_DIR="${ONOS_REPO_DIR:-/root/.vibedev/repos/onos}"
-BRANCH="${ONOS_DEV_BRANCH:-main}"
+REPO_DIR="${ONOS_REPO_DIR:-/root/onos-dev}"
+BRANCH="${ONOS_DEV_BRANCH:-dev}"
 LOG="${ONOS_AUTOPULL_LOG:-/var/log/onos-dev-autopull.log}"
 LOCK=/var/lock/onos-dev-autopull.lock
 INSTALLED=/usr/local/bin/onos-dev-autopull
+# Ba service của bản DÙNG CHUNG. Bản đang-làm-dở (`onos-*-wip`) cố ý KHÔNG nằm
+# đây: nó chạy trên cây làm việc riêng và không bao giờ bị tự kéo code.
+UNITS="${ONOS_DEV_UNITS:-onos-api-dev onos-web-dev onos-seller-dev}"
 
 log() { echo "$(date '+%d/%m %H:%M:%S') $*" >>"$LOG"; }
 
@@ -47,7 +53,9 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+Environment=ONOS_REPO_DIR=$REPO_DIR
 Environment=ONOS_DEV_BRANCH=$BRANCH
+Environment=ONOS_DEV_UNITS=$UNITS
 ExecStart=$INSTALLED
 UNIT
   cat >/etc/systemd/system/onos-dev-autopull.timer <<'UNIT'
@@ -64,7 +72,7 @@ WantedBy=timers.target
 UNIT
   systemctl daemon-reload
   systemctl enable --now onos-dev-autopull.timer
-  echo "Đã bật. Nhánh theo dõi: $BRANCH · log: $LOG"
+  echo "Đã bật. Cây: $REPO_DIR · nhánh: $BRANCH · service: $UNITS · log: $LOG"
   systemctl list-timers onos-dev-autopull.timer --no-pager | head -3
   exit 0
 fi
@@ -128,6 +136,6 @@ fi
 
 # Mã nguồn trong apps/* thì nodemon/vite/next tự nạp lại, không đụng service.
 if [ "$restart_all" = 1 ]; then
-  systemctl restart onos-api-dev onos-web-dev onos-seller-dev
-  log "  đã restart 3 service dev"
+  systemctl restart $UNITS
+  log "  đã restart: $UNITS"
 fi

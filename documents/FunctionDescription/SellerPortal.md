@@ -311,16 +311,24 @@ Còn chậm (chưa làm): `status=completed` và tính lại counts/stats nền 
 - **Redirect `/customer/*` ở admin** (`apps/web/src/App.tsx` `SellerRedirectGate`): khi `VITE_SELLER_URL` khác rỗng, `/customer/login|dashboard|orders|orders/new|orders/import|orders/:productionId|account` chuyển hẳn sang seller (`/login`, `/portal`, `/portal/orders`, `/portal/orders/create|import|:pid`, `/portal/account`, giữ query). Catalog/API docs/`/track`/landing vẫn ở `apps/web` tới đợt 2. Rỗng → chạy như cũ.
 - R2: thêm origin seller (dev + prod) vào CORS bucket trước khi bật upload trực tiếp (DesignStorage.md).
 
-### 8.2 Máy dev dùng chung — tự kéo code (08/09/2026)
+### 8.2 Hai bản dev trên máy hub + nhánh `dev` (08/09/2026)
 
-Ba service dev (`onos-api-dev` nodemon · `onos-web-dev` vite · `onos-seller-dev` next dev) chạy trên **một cây làm việc duy nhất** `/root/.vibedev/repos/onos` của máy `ubuntu-server`, nên trước đây ai muốn thử code trên dev cũng phải nhờ người có SSH `git pull` hộ.
+Trước đây ba service dev chạy thẳng trên cây làm việc tay, nên hai người làm song song là khoá nhau: người này sửa dở thì code người kia không lên được dev. Từ 08/09/2026 tách hẳn hai bản trên cùng máy `ubuntu-server`, dùng CHUNG một MongoDB `onosfactory-dev`:
 
-`dev-autopull.sh` (gốc repo) + timer systemd `onos-dev-autopull.timer` chạy mỗi phút: fetch nhánh theo dõi (mặc định `main`), **fast-forward**, `pnpm install` chỉ khi `pnpm-lock.yaml` đổi, build lại `shared`/`core` chỉ khi hai gói đó đổi, rồi restart ba service. Mã trong `apps/*` thì watcher tự nạp, không đụng service.
+| Bản | Cây mã | Service | Cổng | Tên miền | Ai đụng vào |
+|---|---|---|---|---|---|
+| **Dùng chung** (theo nhánh `dev`) | `/root/onos-dev` | `onos-api-dev` · `onos-web-dev` · `onos-seller-dev` | 3007 · 5173 · 3017 | `dev-onos` · `api-dev-onos` · `seller-dev-onos` `.autonow.vn` | CHỈ script tự kéo — không ai sửa tay |
+| **Đang làm dở** | `/root/.vibedev/repos/onos` | `onos-api-wip` · `onos-web-wip` · `onos-seller-wip` | 3008 · 5174 · 3018 | `wip-onos` · `api-wip-onos` · `seller-wip-onos` `.autonow.vn` | người ngồi máy; KHÔNG bị tự kéo |
 
-- **Ai cũng deploy được dev mà không cần tài khoản trên máy**: chỉ cần quyền push vào repo GitHub.
-- **Không bao giờ `reset --hard`.** Nhánh lệch hoặc còn file theo dõi chưa commit thì bỏ lượt và ghi log — trên máy này có thể có người đang làm dở. File lạ (chưa theo dõi) KHÔNG chặn.
-- Cài/gỡ: `./dev-autopull.sh --install` · `systemctl disable --now onos-dev-autopull.timer`. Nhật ký: `tail -30 /var/log/onos-dev-autopull.log`. Đổi nhánh theo dõi: `ONOS_DEV_BRANCH=<nhánh> ./dev-autopull.sh --install`.
-- Kiểm 08/09/2026: lùi cây làm việc 1 commit, 60 giây sau timer tự kéo lên `ed04d79` và ghi đúng một dòng log.
+**Luồng nhánh:** code lên nhánh `dev` (push thẳng hoặc merge PR) → trong 1 phút bản dùng chung tự cập nhật. `main` để dành cho prod: gộp `dev` vào `main` rồi chạy `./deploy.sh` mới ra thật.
+
+**Tự kéo** — `dev-autopull.sh` + timer `onos-dev-autopull` (mỗi phút): fetch nhánh theo dõi, **fast-forward**, `pnpm install` chỉ khi `pnpm-lock.yaml` đổi, build lại `shared`/`core` chỉ khi hai gói đó đổi, rồi restart ba service dùng chung. Mã trong `apps/*` thì nodemon/vite/next tự nạp.
+
+- Không bao giờ `reset --hard`: nhánh lệch hoặc còn file theo dõi chưa commit thì bỏ lượt và ghi log. Cây dùng chung không ai sửa nên chuyện này gần như không xảy ra.
+- Cài/gỡ: `./dev-autopull.sh --install` · `systemctl disable --now onos-dev-autopull.timer`. Đổi nhánh: `ONOS_DEV_BRANCH=<nhánh> ./dev-autopull.sh --install`. Log: `/var/log/onos-dev-autopull.log`.
+- Env (`.env.development`) KHÔNG nằm trong git nên phải chép tay sang `/root/onos-dev` khi thêm biến mới — đây là bẫy dễ quên nhất của mô hình hai bản.
+
+**DB cập nhật thế nào:** không có bước migrate riêng. Mongo không ràng buộc schema nên thêm trường không cần đụng DB; phần dữ liệu cũ cần vá chạy trong `onModuleInit` của service tương ứng, có cờ claim ở `system_configs` để không chạy hai lần (mẫu `migrateDesignReviewCodes`, `backfillProductLines`). Nghĩa là code mới lên dev → API restart → tự vá. Việc vá dữ liệu chạy tay (như `apps/api/scripts/backfill-order-weight.mjs`) thì vẫn phải gọi tay trên từng môi trường.
 
 ### 8.1 Ghi chú vận hành
 
