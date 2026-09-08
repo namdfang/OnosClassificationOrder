@@ -34,6 +34,7 @@ pnpm seed                              # Seed data (src/seed/seed-runner.ts)
 
 - API dev chạy ở `http://localhost:3007`, global prefix `api/v1`, Swagger ở `/documentation?key=<AGENT_API_KEY>` (dùng chung khoá agent; thiếu khoá thì đóng cả hai — xem `AgentApi.md` §8). **Trang này CHỈ mô tả 5 endpoint `/api/v1/agent` — API nội bộ cố ý không có trong đặc tả** (`AgentApi.md` §8.1); hình dạng request/response của API nội bộ tra ở DTO Zod trong `packages/shared`. Web dev ở `http://localhost:5173`.
 - Setup lần đầu (Docker MongoDB replica set `rs0` + Redis + RabbitMQ, env files từ `.env.development.example` / `.env.example`): xem [`README.md`](README.md).
+- **Máy dev dùng chung tự kéo code**: timer `onos-dev-autopull` chạy `dev-autopull.sh` mỗi phút, fast-forward nhánh `main` rồi build lại `shared`/`core` khi cần — ai có quyền push GitHub là deploy được lên dev, không cần SSH. Không bao giờ ghi đè: nhánh lệch hoặc còn thay đổi chưa commit thì bỏ lượt và ghi `/var/log/onos-dev-autopull.log` (SellerPortal.md §8.2).
 
 ---
 

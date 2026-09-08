@@ -311,6 +311,17 @@ Còn chậm (chưa làm): `status=completed` và tính lại counts/stats nền 
 - **Redirect `/customer/*` ở admin** (`apps/web/src/App.tsx` `SellerRedirectGate`): khi `VITE_SELLER_URL` khác rỗng, `/customer/login|dashboard|orders|orders/new|orders/import|orders/:productionId|account` chuyển hẳn sang seller (`/login`, `/portal`, `/portal/orders`, `/portal/orders/create|import|:pid`, `/portal/account`, giữ query). Catalog/API docs/`/track`/landing vẫn ở `apps/web` tới đợt 2. Rỗng → chạy như cũ.
 - R2: thêm origin seller (dev + prod) vào CORS bucket trước khi bật upload trực tiếp (DesignStorage.md).
 
+### 8.2 Máy dev dùng chung — tự kéo code (08/09/2026)
+
+Ba service dev (`onos-api-dev` nodemon · `onos-web-dev` vite · `onos-seller-dev` next dev) chạy trên **một cây làm việc duy nhất** `/root/.vibedev/repos/onos` của máy `ubuntu-server`, nên trước đây ai muốn thử code trên dev cũng phải nhờ người có SSH `git pull` hộ.
+
+`dev-autopull.sh` (gốc repo) + timer systemd `onos-dev-autopull.timer` chạy mỗi phút: fetch nhánh theo dõi (mặc định `main`), **fast-forward**, `pnpm install` chỉ khi `pnpm-lock.yaml` đổi, build lại `shared`/`core` chỉ khi hai gói đó đổi, rồi restart ba service. Mã trong `apps/*` thì watcher tự nạp, không đụng service.
+
+- **Ai cũng deploy được dev mà không cần tài khoản trên máy**: chỉ cần quyền push vào repo GitHub.
+- **Không bao giờ `reset --hard`.** Nhánh lệch hoặc còn file theo dõi chưa commit thì bỏ lượt và ghi log — trên máy này có thể có người đang làm dở. File lạ (chưa theo dõi) KHÔNG chặn.
+- Cài/gỡ: `./dev-autopull.sh --install` · `systemctl disable --now onos-dev-autopull.timer`. Nhật ký: `tail -30 /var/log/onos-dev-autopull.log`. Đổi nhánh theo dõi: `ONOS_DEV_BRANCH=<nhánh> ./dev-autopull.sh --install`.
+- Kiểm 08/09/2026: lùi cây làm việc 1 commit, 60 giây sau timer tự kéo lên `ed04d79` và ghi đúng một dòng log.
+
 ### 8.1 Ghi chú vận hành
 
 - Dev hub: systemd `onos-seller-dev` (`next dev -p 3017`, tự chạy lúc boot; 3100 của thghub đã bị dự án khác chiếm trên hub) → https://seller-dev-onos.autonow.vn (đã route DNS + restart `cloudflared-onos` 07/09/2026). Chạy tay: `pnpm dev:seller`. Smoke đã chạy 07/09/2026: login sai/đúng, cookie remember 30 ngày, proxy 401, counts + 6 tab khớp list sau lazy-sync, detail + PATCH, `/track` không cookie, handoff mạo danh + logout về admin.
