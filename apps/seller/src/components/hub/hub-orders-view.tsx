@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon, Loader2, PauseCircle, RefreshCw, Truck, Wrench } from 'lucide-react';
 import type { AdminCustomerStagingOrder, CustomerOrderCounts } from 'shared';
 import { InternalStatus } from '@/components/hub/internal-status';
-import { buyLabel, canBuyLabel, ShipmentCell } from '@/components/hub/shipment-cell';
+import { buyInputFrom, buyLabel, canBuyLabel, canBuyLabelNow, ShipmentCell } from '@/components/hub/shipment-cell';
 import { SellerFilterPicker } from '@/components/hub/seller-filter-picker';
 import { Button } from '@/components/shared/button';
 import { OrderCard } from '@/components/orders/order-card';
@@ -102,8 +102,17 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
 
   const lineMeta = lockedLine ? PRODUCT_LINE_META[lockedLine] : null;
   const LineIcon = lineMeta?.icon;
+  // Chỉ tick được đơn mua NGAY được (đã có cân nặng). Đơn thiếu cân nặng phải
+  // nhập tay ở từng dòng — gộp vào lượt mua hàng loạt là mua với cân sai.
   const buyableRows = useMemo(
-    () => orders.filter((o) => canBuyLabel(o.items[0]?.internal)).map((o) => ({ id: o._id, ref: o.items[0]!.internal!.orderRefId! })),
+    () =>
+      orders
+        .filter((o) => canBuyLabelNow(o.items[0]?.internal))
+        .map((o) => ({ id: o._id, ref: o.items[0]!.internal!.orderRefId!, input: buyInputFrom(o.items[0]?.internal)! })),
+    [orders],
+  );
+  const missingWeightCount = useMemo(
+    () => orders.filter((o) => canBuyLabel(o.items[0]?.internal) && !canBuyLabelNow(o.items[0]?.internal)).length,
     [orders],
   );
   const pickedRefs = buyableRows.filter((r) => picked.has(r.id));
@@ -117,7 +126,7 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
     const errors: string[] = [];
     for (const row of pickedRefs) {
       try {
-        await buyLabel(row.ref);
+        await buyLabel(row.ref, row.input);
         ok++;
       } catch (err) {
         errors.push(`${row.ref}: ${err instanceof Error ? err.message : String(err)}`);
@@ -175,6 +184,9 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
               <button type="button" onClick={() => setPicked(new Set())} className="text-[11px] text-text-muted hover:text-text-primary">
                 {t('hub:shipment.clearPick')}
               </button>
+              {missingWeightCount > 0 && (
+                <span className="text-[10.5px] text-warning">{t('hub:shipment.skippedNoWeight', { count: missingWeightCount })}</span>
+              )}
             </>
           )}
           {bulkDone && (
@@ -237,7 +249,7 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
                     return (
                       <tr key={o._id} className={`group border-b border-border2 last:border-0 hover:bg-card-hover align-top text-[11px] ${o.status === 'cancelled' ? 'opacity-60' : ''}`}>
                         <td className={`py-2 px-2 ${STICKY_TD_PICK} w-8`}>
-                          {canBuyLabel(first?.internal) ? (
+                          {canBuyLabelNow(first?.internal) ? (
                             <input
                               type="checkbox"
                               checked={picked.has(o._id)}

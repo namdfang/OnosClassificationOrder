@@ -206,6 +206,9 @@
     "result": "Done: {{ok}} bought, {{fail}} failed",
     "noWeight": "Missing weight",
     "label": "Label",
-    "selfProvided": "Seller supplied"
+    "selfProvided": "Seller supplied",
+    "weightPlaceholder": "gram",
+    "noWeightHint": "Enter the weight in grams to buy",
+    "skippedNoWeight": "{{count}} orders missing weight — enter it per row"
   }
 }

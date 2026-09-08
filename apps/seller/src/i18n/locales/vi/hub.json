@@ -206,6 +206,9 @@
     "result": "Mua xong: {{ok}} thành công, {{fail}} lỗi",
     "noWeight": "Thiếu cân nặng",
     "label": "Label",
-    "selfProvided": "Khách tự cấp"
+    "selfProvided": "Khách tự cấp",
+    "weightPlaceholder": "gram",
+    "noWeightHint": "Nhập cân nặng (gram) rồi mới mua được",
+    "skippedNoWeight": "{{count}} đơn thiếu cân nặng — nhập tay ở từng dòng"
   }
 }

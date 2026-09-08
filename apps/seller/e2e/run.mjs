@@ -156,6 +156,34 @@ await step('Hub — mua vận đơn', async () => {
   }
 });
 
+await step('Hub — bấm mua label phải gửi cân nặng (không 400)', async () => {
+  // 08/09/2026: nút mua từng gọi thiếu `weightGram` nên API trả 400 mọi lần.
+  // Bắt request thật để chắc payload có cân nặng, và đọc mã lỗi trả về.
+  let sent = null;
+  let status = null;
+  let body = '';
+  hub.on('request', (r) => {
+    if (/shipping-vnp\/orders\/.+\/shipment$/.test(r.url()) && r.method() === 'POST') {
+      try { sent = JSON.parse(r.postData() || '{}'); } catch { sent = {}; }
+    }
+  });
+  hub.on('response', async (r) => {
+    if (/shipping-vnp\/orders\/.+\/shipment$/.test(r.url()) && r.request().method() === 'POST') {
+      status = r.status();
+      try { body = (await r.text()).slice(0, 300); } catch { body = ''; }
+    }
+  });
+  const btn = hub.locator('tbody button:has-text("Buy label"), tbody button:has-text("Mua label")').filter({ hasNot: hub.locator('[disabled]') }).first();
+  if ((await btn.count()) === 0) { check('có nút mua bấm được', false, 'không thấy nút nào bấm được'); return; }
+  await btn.click();
+  await hub.waitForTimeout(6000);
+  check('payload có weightGram > 0', !!sent && typeof sent.weightGram === 'number' && sent.weightGram > 0, JSON.stringify(sent));
+  // 400 vì THIẾU CẤU HÌNH (ví/địa chỉ gửi) là chuyện vận hành, chấp nhận được ở
+  // môi trường chưa nạp ví. Cái phải chặn là 400 do payload sai field.
+  check('không phải lỗi validate payload', !/error\.fields|must be|required/i.test(body), `status ${status} · ${body.slice(0, 120)}`);
+  if (status === 400) console.log(`  note  API từ chối vì cấu hình: ${body.slice(0, 140)}`);
+});
+
 await step('Hub — trang Vận hành sản xuất', async () => {
   await hub.goto(`${BASE}/hub/operations`, { waitUntil: 'domcontentloaded', timeout: 120000 });
   await hub.waitForTimeout(7000);

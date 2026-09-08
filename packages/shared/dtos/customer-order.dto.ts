@@ -633,8 +633,11 @@ export const AdminInternalStatusZod = z.object({
    * (`POST shipping-vnp/orders/:orderId/shipment` nhận `_id`, không nhận mã sản xuất).
    */
   orderRefId: z.string().optional(),
-  /** Cân nặng gram — hiện ở cột vận đơn; thiếu số này thì mua label sẽ sai cước. */
+  /** Cân nặng gram + kích thước đóng gói cm — cột vận đơn dựng payload mua từ đây. */
   weight: z.number().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  length: z.number().optional(),
   /** Vận đơn hiện có của đơn (khách tự cấp hoặc VNP đã mua). */
   shipment: z
     .object({
