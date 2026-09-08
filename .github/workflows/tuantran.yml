@@ -35,10 +35,12 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 8.6.10
+      # KHÔNG bật `cache: pnpm`: khi thiếu khoá thì không có bước cài nào chạy,
+      # thư mục store không tồn tại và bước dọn của action tự đánh hỏng cả job
+      # ("Path Validation Error") — job đáng lẽ chỉ cảnh báo lại thành đỏ.
       - uses: actions/setup-node@v4
         with:
           node-version: 20.20.2
-          cache: pnpm
 
       - name: Xác định phạm vi kiểm
         id: scope
