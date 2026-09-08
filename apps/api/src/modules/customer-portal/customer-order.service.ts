@@ -33,6 +33,7 @@ import type {
   PlaceCustomerOrderDto,
   PreviewPushCustomerOrdersResDto,
   ProductionOrderShippingAddress,
+  ProductionOrderTracking,
   ProductLine,
   ProductPrintArea,
   PushCustomerOrdersDto,
@@ -57,7 +58,9 @@ import {
   FULFILLMENT_STAGE_LABELS,
   FULFILLMENT_STAGE_ORDER,
   FulfillmentStage,
+  hasProductionOrderTracking,
   LIFECYCLE_STAGE_KEYS,
+  normalizeProductionOrderTracking,
   PRODUCT_LINES,
   PRODUCT_PRINT_AREA_LABEL_MAP,
   RoleType,
@@ -117,6 +120,10 @@ export const PROD_DERIVE_FIELDS =
   'productionId cancelledAt fulfillmentCompletedAt currentFulfillmentStage heldAt holdReason ' +
   'designerStatus productionErrorSource toolResultNote toolCheckedAt ' +
   'designerAssignedAt designerFirstStartedAt designerCompletedAt fulfillmentStages inProductionAt productLine ' +
+  // Vận đơn: `tracking` (khách tự cấp HOẶC hãng ngoài ghi vào) + `vnpShipment`
+  // (snapshot lúc Admin mua label VNP). Thiếu hai trường này thì seller mua
+  // label xong vẫn KHÔNG thấy mã vận đơn ở portal — chỉ nội bộ thấy.
+  'tracking vnpShipment ' +
   // Trường NỘI BỘ — chỉ `toAdminStagingOrder` (khu /hub) đọc; `toStagingOrder` cho khách không bao giờ chép ra.
   'factoryId assignee priority productionError productionErrorNote productionErrorSource toolResult toolResultNote ' +
   'toolCheckErrorNotes errorFileNote printStatusNote designerRejectedReason';
@@ -222,6 +229,14 @@ interface PricingConfig {
     status?: string;
     retailPrice?: number;
     nonShipCost?: number;
+    /** Cân nặng gram + kích thước đóng gói cm — đi theo đơn tới xưởng và tới bước mua vận đơn. */
+    weight?: number;
+    width?: number;
+    height?: number;
+    length?: number;
+    /** Cước ship niêm yết theo phương thức (cột hệ cũ "SHIP Express US" / "Ship by TikTok"). */
+    expUsShipCost?: number;
+    tiktokShipCost?: number;
   }>;
 }
 interface PricingContext {
@@ -243,6 +258,21 @@ interface QuoteResult {
   inactive?: boolean;
   /** PRD-8 — dòng sản phẩm của config đã resolve. */
   productLine?: ProductLine;
+  /**
+   * Cân nặng (gram) + kích thước đóng gói (cm) của biến thể đã chốt.
+   *
+   * Vì sao phải mang theo (08/09/2026): đơn đẩy sang xưởng trước đây để TRỐNG
+   * bốn trường này dù biến thể khai đủ, nên (1) mua vận đơn phải gõ tay cân
+   * nặng và kích thước rơi về mặc định 1×1×1 cm → sai cước, (2) bảng đơn xưởng
+   * không có số để đóng gói. Đường import nội bộ (`parseOrders.ts` cột 8–11)
+   * luôn có bốn trường này — hai đường phải cấp cùng một bộ dữ liệu.
+   */
+  weight?: number;
+  width?: number;
+  height?: number;
+  length?: number;
+  /** Cước ship của biến thể theo `shipMethod` (`expUsShipCost`/`tiktokShipCost`). */
+  shipCost?: number;
 }
 
 /** Lấy value thuộc tính variation theo tên label (size/color) — attributes tự do key-value. */
@@ -673,6 +703,28 @@ export class CustomerOrderService implements OnModuleInit {
     ];
   }
 
+  /**
+   * Vận đơn hiển thị cho seller: ưu tiên mã KHÁCH TỰ CẤP lưu trên item, sau đó
+   * tới vận đơn ghi trên đơn sản xuất, cuối cùng là snapshot VNP lúc mua label.
+   *
+   * Cố ý CÓ `labelUrl`: đây là đơn của chính seller, hệ cũ cũng cho họ tải label
+   * ("Download Shipping Label"). Trang tra cứu CÔNG KHAI thì vẫn giấu — luật đó
+   * nằm ở `public-track.service.ts`, không đụng tới đây.
+   */
+  private static trackingChoSeller(
+    itemTracking?: ProductionOrderTracking,
+    prod?: ProdDeriveFields,
+  ): ProductionOrderTracking | undefined {
+    if (hasProductionOrderTracking(itemTracking)) return itemTracking;
+    const onOrder = (prod as { tracking?: ProductionOrderTracking } | undefined)?.tracking;
+    if (hasProductionOrderTracking(onOrder)) return onOrder;
+    const vnp = (prod as { vnpShipment?: { trackingCode?: string; labelUrl?: string; cancelledAt?: Date } } | undefined)?.vnpShipment;
+    if (!vnp || vnp.cancelledAt) return undefined;
+    const merged = { number: vnp.trackingCode, labelUrl: vnp.labelUrl };
+
+    return hasProductionOrderTracking(merged) ? normalizeProductionOrderTracking(merged) : undefined;
+  }
+
   /** Map staging doc (+ prod orders đã join) → response `CustomerStagingOrder`. */
   private toStagingOrder(
     doc: Record<string, unknown>,
@@ -696,7 +748,7 @@ export class CustomerOrderService implements OnModuleInit {
         printMethod: it.printMethod,
         productLine: it.productLine,
         designs: it.designs,
-        tracking: it.tracking,
+        tracking: CustomerOrderService.trackingChoSeller(it.tracking, prodByPid.get(it.productionId ?? '')),
         priceSnapshot: it.priceSnapshot,
         productionId: it.productionId,
       };
@@ -886,6 +938,11 @@ export class CustomerOrderService implements OnModuleInit {
     const effective = best ? best.price : unitPrice;
     return {
       ...resolved,
+      weight: variation.weight,
+      width: variation.width,
+      height: variation.height,
+      length: variation.length,
+      shipCost: shipMethod === 'cod' || shipMethod === 'tiktok' ? variation.tiktokShipCost : variation.expUsShipCost,
       snapshot: {
         shipMethod,
         unitPrice,
@@ -975,10 +1032,12 @@ export class CustomerOrderService implements OnModuleInit {
         mockupUrl: item.mockupUrl,
         printMethod: item.printMethod,
         productLine: q.productLine,
-        weight: item.weight,
-        width: item.width,
-        height: item.height,
-        length: item.length,
+        // Khách khai đè được, còn lại lấy theo biến thể — xưởng và bước mua vận
+        // đơn luôn có số, không phải gõ tay (xem QuoteResult.weight).
+        weight: item.weight ?? q.weight,
+        width: item.width ?? q.width,
+        height: item.height ?? q.height,
+        length: item.length ?? q.length,
         designs: item.designs,
         priceSnapshot: q.snapshot,
       };
@@ -1656,10 +1715,10 @@ export class CustomerOrderService implements OnModuleInit {
           mockupUrl: item.mockupUrl,
           printMethod: item.printMethod,
           productLine: q.productLine,
-          weight: item.weight,
-          width: item.width,
-          height: item.height,
-          length: item.length,
+          weight: item.weight ?? q.weight,
+          width: item.width ?? q.width,
+          height: item.height ?? q.height,
+          length: item.length ?? q.length,
           designs: item.designs,
           tracking: item.tracking,
           priceSnapshot: q.snapshot,
@@ -1782,6 +1841,11 @@ export class CustomerOrderService implements OnModuleInit {
           designs: item.designs,
           tracking: item.tracking,
           productLine: q.productLine,
+          // Cân nặng + kích thước theo biến thể (file CSV của khách không có 4 cột này).
+          weight: q.weight,
+          width: q.width,
+          height: q.height,
+          length: q.length,
           priceSnapshot: q.snapshot,
         });
       }
@@ -2061,11 +2125,18 @@ export class CustomerOrderService implements OnModuleInit {
           mockupUrl: it.mockupUrl,
           printMethod: it.printMethod,
           productLine: q.productLine ?? it.productLine,
-          weight: it.weight,
-          width: it.width,
-          height: it.height,
-          length: it.length,
+          // Đơn cũ nằm sẵn ở staging trước 08/09/2026 chưa có bốn trường này →
+          // lùi về biến thể lúc đẩy, khỏi phải backfill.
+          weight: it.weight ?? q.weight,
+          width: it.width ?? q.width,
+          height: it.height ?? q.height,
+          length: it.length ?? q.length,
           quantity: it.quantity ?? 1,
+          // Tiền theo đơn — đường import nội bộ có sẵn (cột 13/14 của file), đường
+          // seller trước đây bỏ trống nên đơn portal đóng góp 0 vào doanh thu
+          // CEO Dashboard (`$baseCost`) và không có cước ship để đối soát.
+          baseCost: it.priceSnapshot?.discountedPrice ?? it.priceSnapshot?.unitPrice ?? q.snapshot?.discountedPrice ?? q.snapshot?.unitPrice,
+          shipCost: q.shipCost,
           designs: it.designs,
           // Vận đơn khách tự cấp đi kèm item (CSV template cột
           // `tracking_*`/`shipping_label`, hoặc `items[].tracking` qua Public
