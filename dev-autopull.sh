@@ -5,13 +5,12 @@
 #
 # Vì sao có (08/09/2026): dev server chạy ba service ở chế độ tự nạp lại
 # (`onos-api-dev` nodemon, `onos-web-dev` vite, `onos-seller-dev` next dev) trên
-# một cây làm việc RIÊNG `/root/onos-dev` — cây này KHÔNG ai ngồi sửa, chỉ script
-# này đụng vào, nên nó luôn đúng bằng nhánh `dev` trên GitHub. Ai muốn thử code
-# trên dev chỉ cần merge vào `dev`, không cần SSH. Script chạy theo hẹn giờ: có
-# commit mới thì kéo về, và chỉ làm thêm việc khi thật sự cần.
+# đúng MỘT cây làm việc `/root/.vibedev/repos/onos`. Script này chạy theo hẹn
+# giờ: nhánh `dev` có commit mới thì kéo về, và chỉ làm thêm việc khi thật sự
+# cần — nghĩa là đẩy code lên `dev` TỪ MÁY NÀO CŨNG ĐƯỢC, một phút sau nó chạy
+# trên dev server, không cần SSH vào đây.
 #
-# Cây `/root/.vibedev/repos/onos` là chỗ làm việc tay, chạy bộ service
-# `onos-*-wip` ở cổng 3008/5174/3018 và KHÔNG bao giờ bị script này kéo.
+# CHỈ theo dõi một nhánh. Các nhánh khác đẩy lên không đụng gì tới máy này.
 #
 # Ba nguyên tắc AN TOÀN, đừng bỏ:
 #  1. **Chỉ đi thẳng** (`merge --ff-only`). Nhánh trên máy dev lệch khỏi remote
@@ -32,13 +31,13 @@
 # repo, vì script nằm trong repo tự sửa chính mình giữa lúc đang chạy.
 set -u
 
-REPO_DIR="${ONOS_REPO_DIR:-/root/onos-dev}"
+REPO_DIR="${ONOS_REPO_DIR:-/root/.vibedev/repos/onos}"
 BRANCH="${ONOS_DEV_BRANCH:-dev}"
 LOG="${ONOS_AUTOPULL_LOG:-/var/log/onos-dev-autopull.log}"
 LOCK=/var/lock/onos-dev-autopull.lock
 INSTALLED=/usr/local/bin/onos-dev-autopull
-# Ba service của bản DÙNG CHUNG. Bản đang-làm-dở (`onos-*-wip`) cố ý KHÔNG nằm
-# đây: nó chạy trên cây làm việc riêng và không bao giờ bị tự kéo code.
+# Ba service dev cần restart khi `shared`/`core` được dựng lại (mã trong `apps/*`
+# thì nodemon/vite/next tự nạp, không cần đụng service).
 UNITS="${ONOS_DEV_UNITS:-onos-api-dev onos-web-dev onos-seller-dev}"
 
 log() { echo "$(date '+%d/%m %H:%M:%S') $*" >>"$LOG"; }

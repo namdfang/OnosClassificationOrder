@@ -311,24 +311,18 @@ Còn chậm (chưa làm): `status=completed` và tính lại counts/stats nền 
 - **Redirect `/customer/*` ở admin** (`apps/web/src/App.tsx` `SellerRedirectGate`): khi `VITE_SELLER_URL` khác rỗng, `/customer/login|dashboard|orders|orders/new|orders/import|orders/:productionId|account` chuyển hẳn sang seller (`/login`, `/portal`, `/portal/orders`, `/portal/orders/create|import|:pid`, `/portal/account`, giữ query). Catalog/API docs/`/track`/landing vẫn ở `apps/web` tới đợt 2. Rỗng → chạy như cũ.
 - R2: thêm origin seller (dev + prod) vào CORS bucket trước khi bật upload trực tiếp (DesignStorage.md).
 
-### 8.2 Hai bản dev trên máy hub + nhánh `dev` (08/09/2026)
+### 8.2 Máy dev tự kéo theo nhánh `dev` (08/09/2026)
 
-Trước đây ba service dev chạy thẳng trên cây làm việc tay, nên hai người làm song song là khoá nhau: người này sửa dở thì code người kia không lên được dev. Từ 08/09/2026 tách hẳn hai bản trên cùng máy `ubuntu-server`, dùng CHUNG một MongoDB `onosfactory-dev`:
+Máy dev (`ubuntu-server`) chạy **một** cây làm việc `/root/.vibedev/repos/onos` với ba service tự nạp lại: `onos-api-dev` (nodemon, 3007) · `onos-web-dev` (vite, 5173) · `onos-seller-dev` (next dev, 3017), phơi ra qua cloudflared thành `dev-onos` / `api-dev-onos` / `seller-dev-onos` `.autonow.vn`.
 
-| Bản | Cây mã | Service | Cổng | Tên miền | Ai đụng vào |
-|---|---|---|---|---|---|
-| **Dùng chung** (theo nhánh `dev`) | `/root/onos-dev` | `onos-api-dev` · `onos-web-dev` · `onos-seller-dev` | 3007 · 5173 · 3017 | `dev-onos` · `api-dev-onos` · `seller-dev-onos` `.autonow.vn` | CHỈ script tự kéo — không ai sửa tay |
-| **Đang làm dở** | `/root/.vibedev/repos/onos` | `onos-api-wip` · `onos-web-wip` · `onos-seller-wip` | 3008 · 5174 · 3018 | `wip-onos` · `api-wip-onos` · `seller-wip-onos` `.autonow.vn` | người ngồi máy; KHÔNG bị tự kéo |
+`dev-autopull.sh` + timer `onos-dev-autopull` chạy mỗi phút: fetch nhánh **`dev`**, fast-forward, `pnpm install` chỉ khi `pnpm-lock.yaml` đổi, build lại `shared`/`core` chỉ khi hai gói đó đổi, rồi restart ba service. Mã trong `apps/*` thì watcher tự nạp. Nghĩa là **đẩy code lên nhánh `dev` từ bất kỳ máy nào là một phút sau chạy trên dev**, không cần SSH.
 
-**Luồng nhánh:** code lên nhánh `dev` (push thẳng hoặc merge PR) → trong 1 phút bản dùng chung tự cập nhật. `main` để dành cho prod: gộp `dev` vào `main` rồi chạy `./deploy.sh` mới ra thật.
-
-**Tự kéo** — `dev-autopull.sh` + timer `onos-dev-autopull` (mỗi phút): fetch nhánh theo dõi, **fast-forward**, `pnpm install` chỉ khi `pnpm-lock.yaml` đổi, build lại `shared`/`core` chỉ khi hai gói đó đổi, rồi restart ba service dùng chung. Mã trong `apps/*` thì nodemon/vite/next tự nạp.
-
-- Không bao giờ `reset --hard`: nhánh lệch hoặc còn file theo dõi chưa commit thì bỏ lượt và ghi log. Cây dùng chung không ai sửa nên chuyện này gần như không xảy ra.
+- Chỉ đụng nhánh `dev`; các nhánh khác đẩy lên không ảnh hưởng gì tới máy này.
+- Không bao giờ `reset --hard`: nhánh lệch, hoặc còn file **đang theo dõi** chưa commit (đang sửa dở trên máy) thì bỏ lượt và ghi log. File lạ chưa theo dõi không chặn.
 - Cài/gỡ: `./dev-autopull.sh --install` · `systemctl disable --now onos-dev-autopull.timer`. Đổi nhánh: `ONOS_DEV_BRANCH=<nhánh> ./dev-autopull.sh --install`. Log: `/var/log/onos-dev-autopull.log`.
-- Env (`.env.development`) KHÔNG nằm trong git nên phải chép tay sang `/root/onos-dev` khi thêm biến mới — đây là bẫy dễ quên nhất của mô hình hai bản.
+- Kiểm 08/09/2026: lùi cây làm việc 1 commit, 60 giây sau timer tự kéo lên và ghi đúng một dòng log.
 
-**DB cập nhật thế nào:** không có bước migrate riêng. Mongo không ràng buộc schema nên thêm trường không cần đụng DB; phần dữ liệu cũ cần vá chạy trong `onModuleInit` của service tương ứng, có cờ claim ở `system_configs` để không chạy hai lần (mẫu `migrateDesignReviewCodes`, `backfillProductLines`). Nghĩa là code mới lên dev → API restart → tự vá. Việc vá dữ liệu chạy tay (như `apps/api/scripts/backfill-order-weight.mjs`) thì vẫn phải gọi tay trên từng môi trường.
+Prod vẫn deploy **tay** bằng `./deploy.sh` trên máy prod, không có cổng CI tự động (nhóm chốt: ai làm nấy tự kiểm rồi tự đẩy). `deploy.sh` nay nhận cả tên nhánh lẫn một SHA đầy đủ, nên đẩy đúng một commit cụ thể được: `./deploy.sh <sha>`.
 
 ### 8.1 Ghi chú vận hành
 

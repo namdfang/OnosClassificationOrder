@@ -19,15 +19,4 @@ ingress:
   # Seller Portal (apps/seller, Next 16) — API đi qua proxy same-origin của Next, không cần hostname riêng.
   - hostname: seller-dev-onos.autonow.vn
     service: http://localhost:3017
-  # Ban DANG LAM DO tren cay /root/.vibedev/repos/onos (service onos-*-wip).
-  # Ban dung chung theo nhanh `dev` giu nguyen ba ten mien o tren.
-  - hostname: wip-onos.autonow.vn
-    path: ^/api
-    service: http://localhost:3008
-  - hostname: wip-onos.autonow.vn
-    service: http://localhost:5174
-  - hostname: api-wip-onos.autonow.vn
-    service: http://localhost:3008
-  - hostname: seller-wip-onos.autonow.vn
-    service: http://localhost:3018
   - service: http_status:404
