@@ -6,12 +6,12 @@
 # khác không bao giờ kích hoạt nó và cũng không thấy lượt chạy đỏ nào.
 #
 # Nó tự co giãn theo quyền hiện có:
-#  - KHÔNG có secret GHCR_TOKEN → kiểm phần không dính registry riêng
-#    (`shared` + `core` + toàn bộ `apps/seller`). Đã đo trên clone sạch: cài và
-#    type-check được, không cần khoá.
-#  - CÓ secret → kiểm thêm `apps/api`: type-check toàn workspace, lint, và 555
-#    test. Gói Zalo `@zero-126/*` nằm ở npm.pkg.github.com nên phần này bắt buộc
-#    có khoá; thêm secret cần quyền admin repo.
+# Cần ĐÚNG một secret: `GHCR_TOKEN`. Gói Zalo `@zero-126/*` nằm ở
+# npm.pkg.github.com, mà `pnpm install` tải nó kể cả khi lọc `--filter
+# ./apps/seller...` (đã thử trên runner thật ngày 08/09/2026: `ERR_PNPM_FETCH_401`;
+# lần thử ở máy dev qua được chỉ vì store cục bộ có sẵn gói). Nói cách khác
+# KHÔNG có khoá thì không kiểm được gì thật, nên thiếu secret là báo rồi dừng —
+# thà không kiểm còn hơn xanh giả. Thêm secret cần quyền admin repo.
 name: CI (tuantran)
 
 on:
@@ -48,22 +48,8 @@ jobs:
             echo "Có GHCR_TOKEN → kiểm toàn workspace."
           else
             echo "full=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Thiếu secret GHCR_TOKEN nên bỏ qua apps/api và apps/web (gói @zero-126/* ở registry riêng). Thêm secret ở Settings → Secrets and variables → Actions để kiểm đầy đủ."
+            echo "::warning::Bỏ qua toàn bộ phép kiểm: thiếu secret GHCR_TOKEN. Thêm ở Settings → Secrets and variables → Actions (cần quyền admin repo) rồi chạy lại."
           fi
-
-      # ── Không có khoá: chỉ phần cài được ─────────────────────────────
-      - name: Cài (shared + core + seller)
-        if: steps.scope.outputs.full == 'false'
-        run: pnpm install --frozen-lockfile --filter ./apps/seller...
-      - name: Build shared + core
-        if: steps.scope.outputs.full == 'false'
-        run: pnpm --filter shared build && pnpm --filter core build
-      - name: Type-check seller
-        if: steps.scope.outputs.full == 'false'
-        run: pnpm --filter ./apps/seller build-types
-      - name: Lint seller
-        if: steps.scope.outputs.full == 'false'
-        run: pnpm --filter ./apps/seller lint
 
       # ── Có khoá: kiểm đầy đủ ─────────────────────────────────────────
       - name: Cài toàn workspace
