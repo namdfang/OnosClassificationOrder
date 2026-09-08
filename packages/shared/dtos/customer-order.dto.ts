@@ -615,6 +615,12 @@ export const AdminInternalStatusZod = z.object({
   stage: z.string().optional(),
   factoryShortName: z.string().optional(),
   factoryName: z.string().optional(),
+  /**
+   * Đơn thuộc xưởng NGOÀI luồng sản xuất VN (`excluded-factory.ts`, hiện là
+   * xưởng US). Đơn như vậy cố ý bị loại khỏi mọi danh sách/thống kê của app
+   * xưởng, nên ops tìm ở đó sẽ không thấy — hub phải nói rõ thay vì để im.
+   */
+  outOfProduction: z.boolean().optional(),
   designerName: z.string().optional(),
   designerStatus: z.string().optional(),
   priority: z.number().optional(),

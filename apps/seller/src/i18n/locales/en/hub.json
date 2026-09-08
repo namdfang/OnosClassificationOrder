@@ -196,7 +196,9 @@
       "designer": "Designer",
       "factory": "Factory",
       "tool-check": "Tool check"
-    }
+    },
+    "outOfProduction": "Outside production",
+    "outOfProductionHint": "This order belongs to a factory outside the domestic production pipeline — the factory app deliberately hides it from every list and stat; track it here or in the by-factory tab."
   },
   "shipment": {
     "buy": "Buy label",

@@ -196,7 +196,9 @@
       "designer": "Designer",
       "factory": "Xưởng",
       "tool-check": "Soát tool"
-    }
+    },
+    "outOfProduction": "Ngoài luồng SX",
+    "outOfProductionHint": "Đơn thuộc xưởng ngoài luồng sản xuất trong nước — app xưởng cố ý không hiện đơn này ở danh sách hay thống kê nào; theo dõi tại đây hoặc ở tab \"Đơn hàng theo xưởng\"."
   },
   "shipment": {
     "buy": "Mua label",

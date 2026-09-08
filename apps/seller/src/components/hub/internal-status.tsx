@@ -25,6 +25,12 @@ export function InternalStatus({ s, compact = false }: { s?: AdminInternalStatus
       <div className="flex flex-wrap items-center gap-1">
         {stageLabel && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold text-white" style={{ background: color }}>{stageLabel}</span>}
         {s.factoryShortName && <span className="inline-flex items-center gap-0.5 text-text-secondary" title={s.factoryName}><Factory size={9} />{s.factoryShortName}</span>}
+        {s.outOfProduction && (
+          // Xưởng ngoài luồng SX: app xưởng cố ý không hiện đơn này ở đâu cả.
+          <span className="px-1 rounded bg-warning-bg text-warning font-bold text-[9px]" title={t('hub:internal.outOfProductionHint')}>
+            {t('hub:internal.outOfProduction')}
+          </span>
+        )}
         {s.designerName && <span className="inline-flex items-center gap-0.5 text-text-secondary"><PenTool size={9} />{s.designerName}{s.designerStatus ? <span className="text-text-muted"> · {s.designerStatus}</span> : null}</span>}
         {s.priority != null && s.priority > 0 && <span className="px-1 rounded bg-warning-bg text-warning font-bold text-[9px]">P{s.priority}</span>}
       </div>

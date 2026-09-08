@@ -245,6 +245,24 @@ Hôm nay ops lên đơn ở OnosPod rồi sang OnosExpress mua label — hai h�
 - **Cân nặng là bắt buộc trong payload** (`weightGram` của `CreateVnpShipmentZod`). Bản đầu 08/09/2026 quên gửi nên mọi lần bấm đều trả `400 weightGram - error.fields.undefined`; e2e đã thêm phép kiểm bắt request thật để không tái diễn.
 - **Vẫn CHỈ Admin/SuperAdmin bấm** — seller không mua label; khi nào mở cho seller thì phải làm ví/ghi nợ theo seller trước, vì ví VNP là ví CHUNG của công ty.
 
+**Cân nặng đơn cũ — `apps/api/scripts/backfill-order-weight.mjs` (08/09/2026).** Cân nặng chỉ được chép vào `OrderEntity` từ khi `pushToProduction` biết đọc biến thể, nên mọi đơn đẩy trước mốc đó để trống và ops phải gõ tay từng đơn. Script điền lại từ biến thể theo ĐÚNG luật `pickVariation` (lọc theo `size` rồi `color`, **chỉ nhận khi còn đúng 1 ứng viên** — điền cân sai tệ hơn để trống vì cước tính theo cân), chỉ ghi vào trường đang trống và không đụng đơn đã hoàn thành/đã hủy. Mặc định thử khô, `--yes` mới ghi, `--all` để gồm cả đơn đã xong.
+
+| Phạm vi | prod 08/09/2026 | dev (đã chạy) |
+| --- | --- | --- |
+| Tổng đơn | 52.764 | — |
+| Thiếu cân nặng | 30.628 | 1.914 (đơn còn mở) |
+| Thiếu cân nặng **và còn mở** | 2.402 | 1.914 |
+| Điền được từ biến thể | chưa chạy | 1.617 (84 %) |
+
+Phần không điền được trên dev: 279 đơn có biến thể chưa khai cân nặng (phải nhờ nhóm sản phẩm điền ở trang Sản phẩm), 16 đơn biến thể mơ hồ, 2 đơn không còn product config.
+
+#### 9.3a Đơn thuộc xưởng ngoài luồng sản xuất (08/09/2026)
+
+Ops báo: đẩy đơn xong tìm trong app xưởng **không thấy đơn đâu**. Không phải mất đơn — sản phẩm đó map vào **xưởng US**, mà `apps/api/src/utils/excluded-factory.ts` cố ý loại xưởng này khỏi MỌI danh sách/thống kê/luồng của app xưởng (Orders.md §21). Đo prod 08/09/2026: **8 sản phẩm `active` (đều hàng may 2D) đang map vào xưởng US**, nên bất kỳ seller nào đặt mấy mã này đều gặp lại cảnh đó.
+
+- BE gắn cờ `internal.outOfProduction` (`AdminInternalStatusZod`) khi xưởng của đơn có `shortName` trùng `EXCLUDED_PRODUCTION_FACTORY_SHORT_NAME`; hub hiện nhãn vàng **"Ngoài luồng SX"** cạnh mã xưởng, tooltip chỉ chỗ theo dõi. FE KHÔNG tự so tên xưởng.
+- Đây mới là phần **nói rõ tình trạng**. Việc 8 sản phẩm kia có nên map sang xưởng trong nước, chặn ở bước đẩy, hay ẩn khỏi catalog là **quyết định nghiệp vụ chưa chốt** — chưa đổi luồng đi của đơn.
+
 Trạng thái 08/09/2026: đăng nhập VNP môi trường thật (`nexoglobal.global`) đã thông, `checkAddress` gọi sống trả 200. Mua label còn chặn ở hai việc VẬN HÀNH, không phải code: **ví VNP đang 0 $** (hãng đòi tối thiểu 50 $) và **tài khoản chưa có địa chỉ gửi nào** (`remote-addresses` trả rỗng) nên `resolveFromAddressId` báo "Chưa cấu hình địa chỉ gửi hàng". Tạo địa chỉ ở `/adm/settings/vnp-shipping` rồi gán xưởng là chạy.
 
 ### 9.2 Hiệu năng tải `/hub/orders*` (F5, 07/09/2026)

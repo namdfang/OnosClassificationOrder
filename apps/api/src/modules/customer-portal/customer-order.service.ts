@@ -80,6 +80,7 @@ import { workshopStageSwitchExpr } from '@/utils/workshop-stage';
 import type { CustomerOrderItem } from './customer-order.entity';
 import { CustomerOrderEntity } from './customer-order.entity';
 import { CustomerPaymentEntity } from './customer-payment.entity';
+import { EXCLUDED_PRODUCTION_FACTORY_SHORT_NAME } from '@/utils/excluded-factory';
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1460,6 +1461,10 @@ export class CustomerOrderService implements OnModuleInit {
           shipment: CustomerOrderService.shipmentChoHub(p),
           factoryShortName: factory?.shortName,
           factoryName: factory?.name,
+          // Xưởng ngoài luồng SX (hiện là US): app xưởng cố ý không hiện đơn này
+          // ở bất kỳ danh sách nào, nên hub phải gắn nhãn — ops đẩy xong đi tìm
+          // trong app xưởng không thấy là tưởng đơn bốc hơi (phản hồi 08/09/2026).
+          outOfProduction: factory?.shortName === EXCLUDED_PRODUCTION_FACTORY_SHORT_NAME || undefined,
           designerName: p.assignee ? refs?.users.get(String(p.assignee)) : undefined,
           designerStatus: str(p.designerStatus),
           priority: typeof p.priority === 'number' ? p.priority : undefined,
