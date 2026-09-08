@@ -62,8 +62,7 @@ import { PublicTrackService } from './public-track.service';
     CustomerApiKeyController,
     CustomerOpenApiController,
     // Khu quản trị `/hub` của Seller Portal (Admin đọc đơn mọi seller).
-    CustomerOrderAdminController,
-  ],
+    CustomerOrderAdminController],
   providers: [CustomerOrderService, CustomerCatalogService, PublicTrackService],
 })
 export class CustomerPortalModule {}

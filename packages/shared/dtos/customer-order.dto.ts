@@ -628,6 +628,26 @@ export const AdminInternalStatusZod = z.object({
   printStatusNote: z.string().optional(),
   designerRejectedReason: z.string().optional(),
   holdReason: z.string().optional(),
+  /**
+   * `_id` của đơn sản xuất — hub cần để gọi luồng mua vận đơn
+   * (`POST shipping-vnp/orders/:orderId/shipment` nhận `_id`, không nhận mã sản xuất).
+   */
+  orderRefId: z.string().optional(),
+  /** Cân nặng gram — hiện ở cột vận đơn; thiếu số này thì mua label sẽ sai cước. */
+  weight: z.number().optional(),
+  /** Vận đơn hiện có của đơn (khách tự cấp hoặc VNP đã mua). */
+  shipment: z
+    .object({
+      trackingCode: z.string().optional(),
+      carrier: z.string().optional(),
+      labelUrl: z.string().optional(),
+      shipmentId: z.string().optional(),
+      status: z.string().optional(),
+      cancelledAt: z.coerce.date().optional(),
+      /** `customer` = khách tự cấp, `vnp` = mình mua qua VNP. */
+      provider: z.string().optional(),
+    })
+    .optional(),
   /** Nhật ký gần nhất của đơn (`orderLogs`). */
   lastLog: z
     .object({ action: z.string(), field: z.string().optional(), userName: z.string().optional(), at: z.coerce.date().optional(), after: z.unknown().optional() })

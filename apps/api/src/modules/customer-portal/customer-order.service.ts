@@ -126,7 +126,7 @@ export const PROD_DERIVE_FIELDS =
   'tracking vnpShipment ' +
   // Trường NỘI BỘ — chỉ `toAdminStagingOrder` (khu /hub) đọc; `toStagingOrder` cho khách không bao giờ chép ra.
   'factoryId assignee priority productionError productionErrorNote productionErrorSource toolResult toolResultNote ' +
-  'toolCheckErrorNotes errorFileNote printStatusNote designerRejectedReason';
+  'toolCheckErrorNotes errorFileNote printStatusNote designerRejectedReason weight width height length';
 
 export interface ProdDeriveFields {
   productionId?: string;
@@ -723,6 +723,40 @@ export class CustomerOrderService implements OnModuleInit {
     const merged = { number: vnp.trackingCode, labelUrl: vnp.labelUrl };
 
     return hasProductionOrderTracking(merged) ? normalizeProductionOrderTracking(merged) : undefined;
+  }
+
+  /**
+   * Vận đơn cho khu quản trị `/hub/orders`: gộp mã KHÁCH TỰ CẤP trên đơn với
+   * snapshot VNP lúc mua label. Khác `trackingChoSeller` ở chỗ có kèm `provider`
+   * và `shipmentId` để ops biết cái nào mình mua, cái nào khách tự dán.
+   */
+  private static shipmentChoHub(prod: Record<string, unknown>): {
+    trackingCode?: string;
+    carrier?: string;
+    labelUrl?: string;
+    shipmentId?: string;
+    status?: string;
+    cancelledAt?: Date;
+    provider?: string;
+  } | undefined {
+    const vnp = prod.vnpShipment as
+      | { shipmentId?: string; trackingCode?: string; labelUrl?: string; lastTrackingStatus?: string; cancelledAt?: Date }
+      | undefined;
+    if (vnp?.shipmentId && !vnp.cancelledAt) {
+      return {
+        trackingCode: vnp.trackingCode,
+        labelUrl: vnp.labelUrl,
+        shipmentId: vnp.shipmentId,
+        status: vnp.lastTrackingStatus,
+        provider: 'vnp',
+      };
+    }
+    const own = prod.tracking as ProductionOrderTracking | undefined;
+    if (hasProductionOrderTracking(own)) {
+      return { trackingCode: own?.number, carrier: own?.carrier, labelUrl: own?.labelUrl, provider: 'customer' };
+    }
+
+    return undefined;
   }
 
   /** Map staging doc (+ prod orders đã join) → response `CustomerStagingOrder`. */
@@ -1418,6 +1452,9 @@ export class CustomerOrderService implements OnModuleInit {
         ...it,
         internal: {
           stage: p.fulfillmentCompletedAt ? 'done' : stage.key,
+          orderRefId: String(p._id),
+          weight: typeof p.weight === 'number' ? p.weight : undefined,
+          shipment: CustomerOrderService.shipmentChoHub(p),
           factoryShortName: factory?.shortName,
           factoryName: factory?.name,
           designerName: p.assignee ? refs?.users.get(String(p.assignee)) : undefined,

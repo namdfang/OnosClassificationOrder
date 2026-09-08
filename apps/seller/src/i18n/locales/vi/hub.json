@@ -196,5 +196,16 @@
       "factory": "Xưởng",
       "tool-check": "Soát tool"
     }
+  },
+  "shipment": {
+    "buy": "Mua label",
+    "buyPicked": "Mua vận đơn đã chọn",
+    "picked": "Đã chọn {{count}} đơn",
+    "clearPick": "Bỏ chọn",
+    "pickAll": "Chọn tất cả đơn mua được",
+    "result": "Mua xong: {{ok}} thành công, {{fail}} lỗi",
+    "noWeight": "Thiếu cân nặng",
+    "label": "Label",
+    "selfProvided": "Khách tự cấp"
   }
 }

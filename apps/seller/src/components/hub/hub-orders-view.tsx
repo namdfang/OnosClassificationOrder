@@ -3,10 +3,12 @@
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image as ImageIcon, Loader2, PauseCircle, RefreshCw, Wrench } from 'lucide-react';
+import { Image as ImageIcon, Loader2, PauseCircle, RefreshCw, Truck, Wrench } from 'lucide-react';
 import type { AdminCustomerStagingOrder, CustomerOrderCounts } from 'shared';
 import { InternalStatus } from '@/components/hub/internal-status';
+import { buyLabel, canBuyLabel, ShipmentCell } from '@/components/hub/shipment-cell';
 import { SellerFilterPicker } from '@/components/hub/seller-filter-picker';
+import { Button } from '@/components/shared/button';
 import { OrderCard } from '@/components/orders/order-card';
 import { OrdersPagination } from '@/components/orders/orders-pagination';
 import { OrdersStatsBar } from '@/components/orders/orders-stats-bar';
@@ -78,6 +80,10 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
   }, [base, line]);
 
   const { data: listRes, loading, refetch } = useApi<ApiRes<AdminCustomerStagingOrder[]>>(`/api/hub/v1/admin/customer-orders?${listQuery}`);
+  // Mua vận đơn hàng loạt: ops tick vài đơn rồi mua một lượt (khuôn ops bên thghub).
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkDone, setBulkDone] = useState<{ ok: number; fail: number; errors: string[] } | null>(null);
   const { data: lineCountsRes } = useApi<ApiRes<CustomerOrderCounts>>(`/api/hub/v1/admin/customer-orders/counts${lineCountsQuery ? `?${lineCountsQuery}` : ''}`);
   const { data: countsRes } = useApi<ApiRes<CustomerOrderCounts>>(`/api/hub/v1/admin/customer-orders/counts${pillCountsQuery ? `?${pillCountsQuery}` : ''}`);
   const orders = listRes?.data ?? [];
@@ -92,6 +98,33 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
 
   const lineMeta = lockedLine ? PRODUCT_LINE_META[lockedLine] : null;
   const LineIcon = lineMeta?.icon;
+  const buyableRows = useMemo(
+    () => orders.filter((o) => canBuyLabel(o.items[0]?.internal)).map((o) => ({ id: o._id, ref: o.items[0]!.internal!.orderRefId! })),
+    [orders],
+  );
+  const pickedRefs = buyableRows.filter((r) => picked.has(r.id));
+
+  // Mua TUẦN TỰ, không song song — mỗi lượt trừ ví và gọi hãng; bắn đồng thời là
+  // mở đường mua trùng và timeout hàng loạt. Ghi lỗi từng đơn để ops biết đơn nào hỏng.
+  const buyPicked = async () => {
+    setBulkBusy(true);
+    setBulkDone(null);
+    let ok = 0;
+    const errors: string[] = [];
+    for (const row of pickedRefs) {
+      try {
+        await buyLabel(row.ref);
+        ok++;
+      } catch (err) {
+        errors.push(`${row.ref}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    setBulkDone({ ok, fail: errors.length, errors: errors.slice(0, 5) });
+    setPicked(new Set());
+    setBulkBusy(false);
+    refetch();
+  };
+
   return (
     // Khung cố định: main không cuộn; phần đầu (header + lọc) đứng yên, chỉ BẢNG cuộn, phân trang neo đáy.
     <div className="flex flex-col gap-2 h-[calc(100dvh-4.25rem-var(--viewas-h,0px))] lg:h-[calc(100dvh-2.5rem-var(--viewas-h,0px))]">
@@ -127,6 +160,28 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
       </div>
       </div>
 
+      {(pickedRefs.length > 0 || bulkDone) && (
+        <div className="shrink-0 flex items-center gap-3 flex-wrap px-3 py-2 rounded-xl border border-accent/40 bg-accent/5">
+          {pickedRefs.length > 0 && (
+            <>
+              <span className="text-[11px] font-semibold text-text-primary">{t('hub:shipment.picked', { count: pickedRefs.length })}</span>
+              <Button size="sm" onClick={buyPicked} loading={bulkBusy}>
+                <Truck size={13} /> {t('hub:shipment.buyPicked')}
+              </Button>
+              <button type="button" onClick={() => setPicked(new Set())} className="text-[11px] text-text-muted hover:text-text-primary">
+                {t('hub:shipment.clearPick')}
+              </button>
+            </>
+          )}
+          {bulkDone && (
+            <span className="text-[11px] text-text-secondary">
+              {t('hub:shipment.result', { ok: bulkDone.ok, fail: bulkDone.fail })}
+              {bulkDone.errors.length > 0 && <span className="text-error"> · {bulkDone.errors[0]}</span>}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="bg-card border border-border1 rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col">
         {loading && orders.length === 0 ? (
           <div className="flex-1 flex items-center justify-center py-20 text-[13px] text-text-muted"><Loader2 size={16} className="animate-spin mr-2" />{t('hub:common.loading')}</div>
@@ -143,7 +198,16 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
               <table className="w-full min-w-[1280px]">
                 <thead className="bg-surface-muted sticky top-0 z-10">
                   <tr className="border-b border-border2">
-                    <th className={`${TH} ${STICKY_TH}`}>{t('customerPortal:orders.columns.order')}</th>
+                    <th className={`${TH} ${STICKY_TH} w-8`}>
+                      <input
+                        type="checkbox"
+                        aria-label={t('hub:shipment.pickAll')}
+                        checked={buyableRows.length > 0 && pickedRefs.length === buyableRows.length}
+                        onChange={() => setPicked(pickedRefs.length === buyableRows.length ? new Set() : new Set(buyableRows.map((r) => r.id)))}
+                        className="accent-[var(--color-accent)] align-middle"
+                      />
+                    </th>
+                    <th className={TH}>{t('customerPortal:orders.columns.order')}</th>
                     <th className={TH}>{t('hub:orders.columns.seller')}</th>
                     <th className={TH}>{t('customerPortal:orders.columns.product')}</th>
                     <th className={TH}>{t('hub:orders.columns.service')}</th>
@@ -168,7 +232,17 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
                     const addr = o.shippingAddress;
                     return (
                       <tr key={o._id} className={`group border-b border-border2 last:border-0 hover:bg-card-hover align-top text-[11px] ${o.status === 'cancelled' ? 'opacity-60' : ''}`}>
-                        <td className={`py-2 px-2 ${STICKY_TD}`}>
+                        <td className={`py-2 px-2 ${STICKY_TD} w-8`}>
+                          {canBuyLabel(first?.internal) ? (
+                            <input
+                              type="checkbox"
+                              checked={picked.has(o._id)}
+                              onChange={() => setPicked((prev) => { const next = new Set(prev); if (next.has(o._id)) next.delete(o._id); else next.add(o._id); return next; })}
+                              className="accent-[var(--color-accent)]"
+                            />
+                          ) : null}
+                        </td>
+                        <td className="py-2 px-2">
                           <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-text-primary whitespace-nowrap">#{code}<CopyButton text={code} size={10} /></span>
                           {o.orderId && o.orderId !== code && <p className="text-[9.5px] text-text-muted truncate max-w-[150px]">{o.orderId}</p>}
                           <p className="text-[9.5px] text-text-muted">{t(`customerPortal:orders.source.${o.source}`)}</p>
@@ -206,7 +280,8 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
                         <td className="py-2 px-2 text-[10.5px]">
                           {addr ? (<><p className="text-text-primary truncate max-w-[140px]">{[addr.firstName, addr.lastName].filter(Boolean).join(' ') || '—'}</p><p className="text-text-muted truncate max-w-[140px]">{[addr.city, addr.state, addr.country].filter(Boolean).join(', ')}</p></>) : <span className="text-text-muted">—</span>}
                         </td>
-                        <td className="py-2 px-2 text-[10.5px]">{tracked?.number ? (<><p className="font-mono text-text-primary">{tracked.number}</p>{tracked.carrier && <p className="text-text-muted">{tracked.carrier}</p>}</>) : <span className="text-text-muted">—</span>}</td>
+                        {/* Cột vận đơn: có mã thì hiện mã + link label, chưa có thì nút mua ngay tại hàng. */}
+                        <td className="py-2 px-2"><ShipmentCell s={first?.internal} onBought={refetch} /></td>
                         <td className="py-2 px-2 text-[10.5px] text-text-secondary whitespace-nowrap">{dayjs(o.pushedAt ?? o.createdAt).format('DD/MM/YYYY HH:mm')}</td>
                       </tr>
                     );

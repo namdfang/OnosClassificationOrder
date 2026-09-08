@@ -196,5 +196,16 @@
       "factory": "Factory",
       "tool-check": "Tool check"
     }
+  },
+  "shipment": {
+    "buy": "Buy label",
+    "buyPicked": "Buy labels for selected",
+    "picked": "{{count}} orders selected",
+    "clearPick": "Clear",
+    "pickAll": "Select all buyable orders",
+    "result": "Done: {{ok}} bought, {{fail}} failed",
+    "noWeight": "Missing weight",
+    "label": "Label",
+    "selfProvided": "Seller supplied"
   }
 }

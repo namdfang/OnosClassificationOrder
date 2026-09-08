@@ -204,6 +204,18 @@ Thao tác (gán designer, đổi xưởng, báo lỗi) vẫn ở app xưởng: n
 
 **Dữ liệu hub luôn mới (07/09/2026):** staging `customer_orders` được bồi tăng dần từ `orders` cho mọi khách (cron 5' + trước mỗi lần admin đọc — `CustomerOrderIntake.md`), nên lọc "Hôm nay" ở `/hub/orders*` có đơn xưởng vừa import, không cần khách mở portal.
 
+### 9.3 Mua vận đơn ngay trên `/hub/orders*` (08/09/2026)
+
+Hôm nay ops lên đơn ở OnosPod rồi sang OnosExpress mua label — hai hệ, hai lần đăng nhập. Hub gom lại: ops thấy đơn nào chưa có vận đơn thì mua ngay tại hàng, hoặc tick nhiều đơn mua một lượt (khuôn ops bên thghub).
+
+- **Cột "Vận đơn"** (`components/hub/shipment-cell.tsx`) thay cột tracking chỉ-đọc cũ: có mã thì hiện mã + nguồn (`VNP` hay khách tự cấp) + trạng thái + link tải label; chưa có thì hiện nút **Mua label**. Đơn thiếu cân nặng hiện cảnh báo vàng (mua với cân sai là sai cước).
+- **Mua hàng loạt:** ô tick ở cột đầu CHỈ hiện với đơn mua được (`canBuyLabel`: có `orderRefId`, chưa có mã vận đơn); chọn xong hiện thanh "Đã chọn N đơn → Mua vận đơn đã chọn". Mua **TUẦN TỰ** chứ không song song — mỗi lượt trừ ví và gọi hãng, bắn đồng thời là mở đường mua trùng và timeout hàng loạt; kết quả trả về "N thành công, M lỗi" kèm lỗi đầu tiên.
+- **Không nhân bản nghiệp vụ:** gọi thẳng `POST /api/hub/v1/shipping-vnp/orders/:orderRefId/shipment` — chính endpoint của khu quản trị, nên chống mua trùng (`requestId` + unique index), giữ chỗ `purchasing`, đối soát ví, hủy fail-closed vẫn nằm nguyên ở `ShippingLabelPatterns.md`. Hub chỉ là chỗ bấm.
+- **BE cấp thêm cho hub** (`AdminInternalStatusZod`): `orderRefId` (`OrderEntity._id` — endpoint mua nhận `_id`, không nhận mã sản xuất), `weight`, và `shipment {trackingCode, carrier, labelUrl, shipmentId, status, cancelledAt, provider}` gộp bởi `shipmentChoHub()` — ưu tiên snapshot VNP còn hiệu lực, sau đó tới vận đơn khách tự cấp. `PROD_DERIVE_FIELDS` thêm `weight width height length`.
+- **Vẫn CHỈ Admin/SuperAdmin bấm** — seller không mua label; khi nào mở cho seller thì phải làm ví/ghi nợ theo seller trước, vì ví VNP là ví CHUNG của công ty.
+
+Trạng thái 08/09/2026: đăng nhập VNP môi trường thật (`nexoglobal.global`) đã thông, `checkAddress` gọi sống trả 200. Mua label còn chặn ở hai việc VẬN HÀNH, không phải code: **ví VNP đang 0 $** (hãng đòi tối thiểu 50 $) và **tài khoản chưa có địa chỉ gửi nào** (`remote-addresses` trả rỗng) nên `resolveFromAddressId` báo "Chưa cấu hình địa chỉ gửi hàng". Tạo địa chỉ ở `/adm/settings/vnp-shipping` rồi gán xưởng là chạy.
+
 ### 9.2 Hiệu năng tải `/hub/orders*` (F5, 07/09/2026)
 
 Trước tối ưu, F5 `/hub/orders` chờ ~6 s: `admin/customer-orders` 6,3 s + `counts` 5 s (×2, cho tab + pill) + `stats` 5,4 s — nguyên nhân là `$lookup orders` + derive trạng thái chạy trên CẢ 38k document staging rồi mới phân trang.
