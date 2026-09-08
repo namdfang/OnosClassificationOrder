@@ -40,7 +40,8 @@ const argOf = (name) => {
 function resolveUri() {
   const explicit = argOf('--uri') || process.env.DB_URI;
   if (explicit) return explicit;
-  for (const file of ['.env', '.env.development']) {
+  // Prod dùng `.env.production`, máy dev dùng `.env.development` — dò cả ba.
+  for (const file of ['.env', '.env.production', '.env.development']) {
     const p = path.resolve(process.cwd(), file);
     if (!fs.existsSync(p)) continue;
     const hit = fs
