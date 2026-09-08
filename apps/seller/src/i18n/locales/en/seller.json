@@ -13,7 +13,8 @@
     "account": "My account",
     "signOut": "Sign out",
     "customer": "Customer",
-    "api": "API & Webhooks"
+    "api": "API & Webhooks",
+    "catalog": "Catalog"
   },
   "login": {
     "welcome": "Sign in to Seller Portal",
@@ -114,5 +115,37 @@
     "wholeMonth": "Click to select the whole month",
     "prevMonth": "Previous month",
     "nextMonth": "Next month"
+  },
+  "catalog": {
+    "title": "Product catalog",
+    "subtitle": "Every product on sale · look up SKUs for the import sheet",
+    "searchPlaceholder": "Search product name, SKU…",
+    "allCategories": "All categories",
+    "allCollections": "All",
+    "collections": "Collections",
+    "totalProducts": "{{count}} products",
+    "exportSku": "Download SKU list",
+    "skuFileName": "onos-sku.csv",
+    "emptyTitle": "No products yet",
+    "emptyDesc": "This service has no products open. Contact support if you need to order.",
+    "notFound": "Product not found",
+    "backToCatalog": "Product catalog",
+    "orderNow": "New order",
+    "variations": "Variations & price",
+    "skuHint": "Copy the SKU into the sku column of the import file",
+    "colSku": "SKU",
+    "colVariation": "Variation",
+    "colPrice": "Price",
+    "colShipCod": "Ship COD",
+    "colTiktok": "TikTok ship",
+    "colWeight": "Weight",
+    "details": "Product details",
+    "printAreas": "Print areas (* file required)",
+    "template": "Design template",
+    "printDocument": "Print document",
+    "sizeChart": "Size chart",
+    "importTax": "US import tax",
+    "unit": "unit",
+    "lookupSku": "Look up SKU"
   }
 }

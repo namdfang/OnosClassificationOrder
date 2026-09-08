@@ -82,6 +82,17 @@ Mirror `apps/web/src/pages/customer/orders/new.tsx`: bộ chọn sản phẩm t�
 
 Mirror `apps/web/src/pages/customer/orders/import.tsx`: `xlsx` parse template fulfill OnosPod cũ → group `(order_id, identifier)` → validate từng đơn bằng **`CustomerImportOrderZod` import từ `shared/client`** (cùng schema BE `ImportCustomerOrdersDto`, xem §5) → `POST customer/orders/import/resolve` đối chiếu SKU (ảnh/tên/giá + cảnh báo thiếu design) → `POST customer/orders/import` → bảng kết quả created/duplicated/failed → nút sang tab Chờ đẩy SX. Template tải ở `/customer-order-template.csv` (copy từ `apps/web/public`).
 
+### 2.10 Danh mục sản phẩm `/portal/catalog` (08/09/2026 — phản hồi vận hành)
+
+Ops báo: sidebar KHÔNG có trang danh mục, seller chỉ thấy sản phẩm khi bấm "Đặt đơn mới" TRONG một dịch vụ (nên vào từ trang 3D thì chỉ thấy sản phẩm 3D), và **không tra được SKU để điền file CSV import** — chặn hẳn việc lên đơn 2D/Gỗ hàng loạt.
+
+- **`/portal/catalog`** (`components/catalog/catalog-view.tsx`): entry sidebar mới "Danh mục" đặt TRÊN "Đơn hàng"; tab 6 dòng sản phẩm + số đếm lấy từ `GET customer/catalog/facets` (`productLines`), pill danh mục + collection, ô tìm kiếm debounce 350 ms, lưới card dùng lại `CatalogProductCard`, phân trang; mọi bộ lọc nằm trên URL (`line,category,collection,q,page,limit`). Nút **"Tải danh sách SKU"** kéo hết trang theo đúng bộ lọc đang xem (`components/catalog/sku-csv.ts`, trần 30 trang × 100) rồi xuất CSV `sku,product,product_line,variation,price_usd,ship_cod_usd,tiktok_usd,weight_gram,package_cm` (có BOM cho Excel).
+- **`/portal/catalog/[id]`** (`catalog-detail-view.tsx`): gallery (mockup + images + size chart), badge dòng, thuế nhập Mỹ/đơn vị, link template + tài liệu in + bảng size, và **bảng biến thể có cột SKU + nút chép** — đây là thứ seller cần để điền cột `sku` của file import; kèm giá bán (đã áp khuyến mãi theo tier), Ship COD, Ship TikTok, cân nặng + kích thước; nút "Đặt đơn mới" sang đúng dịch vụ của sản phẩm. Giá vốn tuyệt đối không ra tới đây (Catalog.md).
+- Trang import CSV thêm nút **"Tra SKU"** link sang `/portal/catalog?line=<dịch vụ>`.
+- Hook `lib/use-debounced.ts` tách dùng chung (hub orders view dùng lại).
+
+**Điều kiện để seller thấy sản phẩm:** `ProductConfig.status` phải là `active` (hoặc trống) — cổng hiển thị duy nhất của catalog khách. Ngày 08/09/2026 trên prod cả 3 sản phẩm Gỗ đều `inactive` nên tab Gỗ trống; 2 trong 3 còn gán nhầm xưởng Mê Linh thay vì TNW. Đây là việc cấu hình dữ liệu, không phải lỗi code.
+
 ### 2.9a API & Webhook `/portal/api` (tab riêng, 07/09/2026)
 
 Khuôn `portal/api-keys` của thghub: tab bar **API key · Webhook · Lệnh mẫu** trong 1 card, banner vàng hiện key plain **một lần** ghim trên tab bar. Tái dùng `GET/POST/DELETE customer/api-keys` + `customer/webhooks` (ORD-4). Lệnh mẫu dựng từ `NEXT_PUBLIC_OPEN_API_URL` (mặc định `https://api.onosfactory.com/api/v1`). Nút "Tài liệu API" mở `NEXT_PUBLIC_ADMIN_URL/customer/api/docs` (tài liệu đầy đủ chuyển sang seller ở đợt 2). Danh sách sự kiện webhook lấy từ `CUSTOMER_WEBHOOK_EVENTS` — đã dời sang `shared/client` (dto re-export). Trang tài khoản chỉ còn link sang đây.

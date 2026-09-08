@@ -33,6 +33,7 @@ export function buildCustomerNav(t: TFunction): NavGroup[] {
       group: t('nav.groupMain', { ns: 'seller' }),
       items: [
         { id: 'dashboard', icon: '📊', label: t('nav.dashboard', { ns: 'seller' }), href: '/portal' },
+        { id: 'catalog', icon: '🗂️', label: t('nav.catalog', { ns: 'seller' }), href: '/portal/catalog' },
         {
           id: 'orders',
           icon: '📦',

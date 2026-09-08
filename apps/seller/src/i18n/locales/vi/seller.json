@@ -13,7 +13,8 @@
     "account": "Tài khoản của tôi",
     "signOut": "Đăng xuất",
     "customer": "Khách hàng",
-    "api": "API & Webhook"
+    "api": "API & Webhook",
+    "catalog": "Danh mục"
   },
   "login": {
     "welcome": "Đăng nhập cổng seller",
@@ -114,5 +115,37 @@
     "wholeMonth": "Bấm để chọn cả tháng",
     "prevMonth": "Tháng trước",
     "nextMonth": "Tháng sau"
+  },
+  "catalog": {
+    "title": "Danh mục sản phẩm",
+    "subtitle": "Toàn bộ sản phẩm đang bán · tra SKU để điền file import",
+    "searchPlaceholder": "Tìm tên sản phẩm, SKU…",
+    "allCategories": "Tất cả danh mục",
+    "allCollections": "Tất cả",
+    "collections": "Bộ sưu tập",
+    "totalProducts": "{{count}} sản phẩm",
+    "exportSku": "Tải danh sách SKU",
+    "skuFileName": "onos-sku.csv",
+    "emptyTitle": "Chưa có sản phẩm",
+    "emptyDesc": "Dịch vụ này chưa mở sản phẩm nào. Liên hệ hỗ trợ nếu bạn cần đặt hàng.",
+    "notFound": "Không tìm thấy sản phẩm",
+    "backToCatalog": "Danh mục sản phẩm",
+    "orderNow": "Đặt đơn mới",
+    "variations": "Biến thể & giá",
+    "skuHint": "Chép SKU để điền cột sku trong file import",
+    "colSku": "SKU",
+    "colVariation": "Biến thể",
+    "colPrice": "Giá bán",
+    "colShipCod": "Ship COD",
+    "colTiktok": "Ship TikTok",
+    "colWeight": "Cân nặng",
+    "details": "Thông tin sản phẩm",
+    "printAreas": "Vị trí in (* bắt buộc có file)",
+    "template": "Tải template thiết kế",
+    "printDocument": "Tài liệu in",
+    "sizeChart": "Bảng size",
+    "importTax": "Thuế nhập Mỹ",
+    "unit": "cái",
+    "lookupSku": "Tra SKU"
   }
 }

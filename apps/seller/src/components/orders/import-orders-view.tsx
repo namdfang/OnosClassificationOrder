@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Fragment, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, ArrowLeft, CheckCircle2, Download, FileUp, Image as ImageIcon, Upload, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BookOpen, CheckCircle2, Download, FileUp, Image as ImageIcon, Upload, XCircle } from 'lucide-react';
 import type { CustomerImportOrder, CustomerImportResultRow, DesignFields, ProductionOrderTracking, ResolvedImportSku } from 'shared';
 import { CustomerImportOrderZod, parseCustomerShipMethod } from 'shared/client';
 import * as XLSX from 'xlsx';
@@ -380,9 +380,15 @@ export function ImportOrdersView({ line }: { line: ProductLine }) {
         title={t('customerPortal:importCsv.title')}
         subtitle={t('customerPortal:importCsv.subtitle')}
         actions={
-          <a href="/customer-order-template.csv" download>
-            <Button variant="secondary" size="sm"><Download size={13} className="mr-1.5" />{t('customerPortal:importCsv.downloadTemplate')}</Button>
-          </a>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Cột `sku` là bắt buộc trong file — nhưng trước 08/09/2026 không có chỗ nào tra SKU. Link thẳng sang danh mục. */}
+            <Link href={`/portal/catalog${line ? `?line=${line}` : ''}`} prefetch={false}>
+              <Button variant="outline" size="sm"><BookOpen size={13} className="mr-1.5" />{t('seller:catalog.lookupSku')}</Button>
+            </Link>
+            <a href="/customer-order-template.csv" download>
+              <Button variant="secondary" size="sm"><Download size={13} className="mr-1.5" />{t('customerPortal:importCsv.downloadTemplate')}</Button>
+            </a>
+          </div>
         }
       />
 

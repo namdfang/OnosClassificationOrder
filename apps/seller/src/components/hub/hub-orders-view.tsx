@@ -24,16 +24,8 @@ import { useUrlState } from '@/hooks/use-url-state';
 import { orderDisplayCode, type ApiRes } from '@/lib/customer-orders';
 import { driveThumbnailUrl } from '@/lib/label-preview';
 import { isProductLine, PRODUCT_LINE_META, type ProductLine } from '@/lib/product-lines';
+import { useDebounced } from '@/lib/use-debounced';
 import { fmtUSD } from '@/lib/utils';
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const id = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(id);
-  }, [value, ms]);
-  return v;
-}
 
 const TH = 'py-2 px-2 text-left text-[9px] text-text-muted font-semibold uppercase tracking-wider';
 // Cột "Đơn hàng" cố định bên trái khi cuộn ngang (bảng rộng 1280px+): th/td `sticky left-0`, nền đặc để không lộ chữ phía sau,
