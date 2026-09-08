@@ -104,11 +104,12 @@
       "date": "Ngày"
     },
     "openAsSeller": "Mở như seller",
-    "subtitleOms": "Đơn khách của mọi seller · 6 dịch vụ · chỉ đọc",
+    "subtitleOms": "Đơn khách của mọi seller · 6 dịch vụ · lên đơn, đẩy sản xuất, mua vận đơn",
     "refresh": "Làm mới",
     "searchPlaceholder": "Tìm mã đơn, SKU, seller...",
     "totalOrders": "{{count}} đơn",
-    "subtitleLine": "Đơn khách dịch vụ {{line}} của mọi seller · chỉ đọc"
+    "subtitleLine": "Đơn khách dịch vụ {{line}} của mọi seller · lên đơn, đẩy sản xuất, mua vận đơn",
+    "push": "Đẩy SX"
   },
   "notifications": {
     "title": "Thông báo cho khách",

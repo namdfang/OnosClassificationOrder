@@ -147,5 +147,22 @@
     "importTax": "Thuế nhập Mỹ",
     "unit": "cái",
     "lookupSku": "Tra SKU"
+  },
+  "addressCheck": {
+    "nameTooShort": "Tên người nhận quá ngắn",
+    "addressTooShort": "Địa chỉ quá ngắn",
+    "addressNoNumber": "Địa chỉ thiếu số nhà",
+    "cityTooShort": "Thành phố không hợp lệ",
+    "phoneDigits": "Số điện thoại phải có 9–15 chữ số",
+    "emailInvalid": "Email không hợp lệ",
+    "stateRequiredUs": "Đơn đi Mỹ bắt buộc có bang",
+    "stateInvalidUs": "Mã bang Mỹ không hợp lệ (vd CA, TX)",
+    "zipRequiredUs": "Đơn đi Mỹ bắt buộc có ZIP",
+    "zipInvalidUs": "ZIP Mỹ phải dạng 12345 hoặc 12345-6789",
+    "zipRequired": "Thiếu mã bưu điện",
+    "verify": "Xác minh địa chỉ với hãng",
+    "verifying": "Đang xác minh…",
+    "verifyOk": "Địa chỉ hợp lệ",
+    "verifyFail": "Hãng không xác nhận được địa chỉ"
   }
 }

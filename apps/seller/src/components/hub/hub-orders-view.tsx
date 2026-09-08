@@ -4,7 +4,7 @@ import Link from 'next/link';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image as ImageIcon, Loader2, PauseCircle, Plus, RefreshCw, Truck, Wrench } from 'lucide-react';
+import { Image as ImageIcon, Loader2, PauseCircle, Plus, RefreshCw, Send, Truck, Wrench } from 'lucide-react';
 import type { AdminCustomerStagingOrder, CustomerOrderCounts } from 'shared';
 import { InternalStatus } from '@/components/hub/internal-status';
 import { buyInputFrom, buyLabel, canBuyLabel, canBuyLabelNow, ShipmentCell } from '@/components/hub/shipment-cell';
@@ -22,7 +22,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { PageHeader } from '@/components/shared/page-header';
 import { SafeImage } from '@/components/shared/safe-image';
 import { SearchInput } from '@/components/shared/search-input';
-import { useApi } from '@/hooks/use-api';
+import { apiFetch, useApi } from '@/hooks/use-api';
 import { useUrlState } from '@/hooks/use-url-state';
 import { orderDisplayCode, type ApiRes } from '@/lib/customer-orders';
 import { driveThumbnailUrl } from '@/lib/label-preview';
@@ -89,6 +89,24 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkDone, setBulkDone] = useState<{ ok: number; fail: number; errors: string[] } | null>(null);
+  const [pushingId, setPushingId] = useState<string | null>(null);
+
+  /** Đẩy 1 đơn chờ vào sản xuất THAY seller — gọi chính luồng push của seller. */
+  const pushOne = async (o: AdminCustomerStagingOrder) => {
+    setPushingId(o._id);
+    try {
+      await apiFetch(`/api/hub/v1/admin/customer-orders/push?customerId=${encodeURIComponent(o.customerId)}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ids: [o._id] }),
+      });
+      refetch();
+    } catch (err) {
+      setBulkDone({ ok: 0, fail: 1, errors: [err instanceof Error ? err.message : String(err)] });
+    } finally {
+      setPushingId(null);
+    }
+  };
   const { data: lineCountsRes } = useApi<ApiRes<CustomerOrderCounts>>(`/api/hub/v1/admin/customer-orders/counts${lineCountsQuery ? `?${lineCountsQuery}` : ''}`);
   const { data: countsRes } = useApi<ApiRes<CustomerOrderCounts>>(`/api/hub/v1/admin/customer-orders/counts${pillCountsQuery ? `?${pillCountsQuery}` : ''}`);
   const orders = listRes?.data ?? [];
@@ -296,6 +314,19 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
                               </span>
                             )}
                             {stage && o.status !== 'pending' && <span className="text-[9.5px] text-text-muted">{stage}</span>}
+                            {o.status === 'pending' && (
+                              // Đơn ops vừa lên hộ nằm ở CHỜ ĐẨY — đẩy ngay tại đây,
+                              // khỏi phải mạo danh seller mới đẩy được.
+                              <button
+                                type="button"
+                                disabled={pushingId === o._id}
+                                onClick={() => pushOne(o)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cta text-cta-foreground text-[9.5px] font-bold disabled:opacity-60"
+                              >
+                                {pushingId === o._id ? <Loader2 size={9} className="animate-spin" /> : <Send size={9} />}
+                                {t('hub:orders.push')}
+                              </button>
+                            )}
                           </div>
                         </td>
                         <td className="py-2 px-2"><InternalStatus s={first?.internal} /></td>

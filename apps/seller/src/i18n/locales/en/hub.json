@@ -104,11 +104,12 @@
       "date": "Date"
     },
     "openAsSeller": "Open as seller",
-    "subtitleOms": "Customer orders across all sellers · 6 services · read-only",
+    "subtitleOms": "Customer orders across all sellers · 6 services · create, push, buy labels",
     "refresh": "Refresh",
     "searchPlaceholder": "Search order id, SKU, seller...",
     "totalOrders": "{{count}} total orders",
-    "subtitleLine": "{{line}} customer orders across all sellers · read-only"
+    "subtitleLine": "{{line}} customer orders across all sellers · create, push, buy labels",
+    "push": "Push"
   },
   "notifications": {
     "title": "Customer notifications",

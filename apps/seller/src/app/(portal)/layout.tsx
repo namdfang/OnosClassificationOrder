@@ -36,15 +36,16 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    // Khung CỐ ĐỊNH trên laptop: chỉ vùng nội dung cuộn, sidebar/header đứng yên.
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col bg-background">
       <ImpersonationBanner />
-      <div className="flex flex-1">
+      <div className="flex flex-1 lg:min-h-0">
         <CustomerSidebar />
         <SidebarBackdrop />
         <MobileMenuButton />
         <div className="flex-1 ml-0 lg:ml-[210px] flex flex-col min-w-0">
           {/* Mobile: chừa chỗ cho nút menu fixed góc trái (MobileMenuButton) */}
-          <main className="flex-1 p-3 pt-14 sm:p-4 sm:pt-14 lg:p-5">{children}</main>
+          <main className="flex-1 lg:min-h-0 lg:overflow-y-auto p-3 pt-14 sm:p-4 sm:pt-14 lg:p-5">{children}</main>
         </div>
       </div>
     </div>

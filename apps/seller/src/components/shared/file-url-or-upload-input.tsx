@@ -13,6 +13,39 @@ interface FileUrlOrUploadInputProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  /**
+   * Đường gọi các API design. Mặc định là đường của SELLER; hub truyền đường
+   * `admin/...` kèm `customerId` vì nhân viên cầm token nhân viên — gọi đường
+   * seller sẽ 401 và 401 đá thẳng người dùng về trang đăng nhập giữa lúc lên đơn.
+   */
+  designApi?: DesignApi;
+}
+
+/** Bốn lệnh gọi của luồng tải file, tách ra để hub và seller dùng chung ô nhập. */
+export interface DesignApi {
+  uploadConfig: string;
+  presign: string;
+  confirm: string;
+  byShaOf: (sha256: string) => string;
+}
+
+export const SELLER_DESIGN_API: DesignApi = {
+  uploadConfig: '/api/v1/customer/designs/upload-config',
+  presign: '/api/v1/customer/designs/presign',
+  confirm: '/api/v1/customer/designs/confirm',
+  byShaOf: (sha) => `/api/v1/customer/designs/${sha}`,
+};
+
+/** Đường của hub: cùng nghiệp vụ, file vẫn ghi tên seller đích. */
+export function hubDesignApi(customerId: string): DesignApi {
+  const q = `customerId=${encodeURIComponent(customerId)}`;
+
+  return {
+    uploadConfig: `/api/hub/v1/admin/customer-orders/designs/upload-config`,
+    presign: `/api/hub/v1/admin/customer-orders/designs/presign?${q}`,
+    confirm: `/api/hub/v1/admin/customer-orders/designs/confirm?${q}`,
+    byShaOf: (sha) => `/api/hub/v1/admin/customer-orders/designs/${sha}`,
+  };
 }
 
 type UploadState =
@@ -25,20 +58,22 @@ type UploadState =
   | { phase: 'error'; message: string };
 
 /** Cache cấu hình tải lên ở module — 1 form nhiều ô, chỉ gọi 1 lần. Lỗi thì xoá để lần sau thử lại. */
-let uploadConfigPromise: Promise<DesignUploadConfig> | null = null;
-function loadUploadConfig(): Promise<DesignUploadConfig> {
-  if (!uploadConfigPromise) {
-    uploadConfigPromise = apiFetch<ApiRes<DesignUploadConfig>>('/api/v1/customer/designs/upload-config')
-      .then((res) => {
-        if (!res.data?.maxUploadMb) throw new Error('upload config missing');
-        return res.data;
-      })
-      .catch((e) => {
-        uploadConfigPromise = null;
-        throw e;
-      });
-  }
-  return uploadConfigPromise;
+const uploadConfigCache = new Map<string, Promise<DesignUploadConfig>>();
+function loadUploadConfig(url: string): Promise<DesignUploadConfig> {
+  const hit = uploadConfigCache.get(url);
+  if (hit) return hit;
+  const p = apiFetch<ApiRes<DesignUploadConfig>>(url)
+    .then((res) => {
+      if (!res.data?.maxUploadMb) throw new Error('upload config missing');
+      return res.data;
+    })
+    .catch((e) => {
+      uploadConfigCache.delete(url);
+      throw e;
+    });
+  uploadConfigCache.set(url, p);
+
+  return p;
 }
 
 function isAllowedFile(file: File, cfg: DesignUploadConfig): boolean {
@@ -85,7 +120,8 @@ interface PresignRes {
  * HOẶC upload trực tiếp browser→R2: kiểm định dạng/kích thước → sha256 → presign (dedup) → PUT →
  * confirm → poll. Value cuối = CDN original URL. R2 bucket PHẢI có CORS cho origin seller.
  */
-export function FileUrlOrUploadInput({ value, onChange, placeholder, className }: FileUrlOrUploadInputProps) {
+export function FileUrlOrUploadInput({ value, onChange, placeholder, className, designApi }: FileUrlOrUploadInputProps) {
+  const api = designApi ?? SELLER_DESIGN_API;
   const { t } = useTranslation('customerPortal');
   const fileRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<UploadState>({ phase: 'idle' });
@@ -93,7 +129,7 @@ export function FileUrlOrUploadInput({ value, onChange, placeholder, className }
 
   useEffect(() => {
     let alive = true;
-    loadUploadConfig().then(
+    loadUploadConfig(api.uploadConfig).then(
       (cfg) => {
         if (alive) setConfig(cfg);
       },
@@ -102,7 +138,7 @@ export function FileUrlOrUploadInput({ value, onChange, placeholder, className }
     return () => {
       alive = false;
     };
-  }, []);
+  }, [api.uploadConfig]);
 
   const busy = state.phase === 'hashing' || state.phase === 'uploading' || state.phase === 'processing';
   const accept = config ? [...config.allowedMimeTypes, ...config.allowedExtensions].join(',') : undefined;
@@ -110,7 +146,7 @@ export function FileUrlOrUploadInput({ value, onChange, placeholder, className }
   const handleFile = async (file: File) => {
     let cfg: DesignUploadConfig;
     try {
-      cfg = await loadUploadConfig();
+      cfg = await loadUploadConfig(api.uploadConfig);
       setConfig(cfg);
     } catch {
       setState({ phase: 'error', message: t('fileInput.configFailed') });
@@ -132,7 +168,7 @@ export function FileUrlOrUploadInput({ value, onChange, placeholder, className }
       setState({ phase: 'hashing' });
       const sha256 = await sha256OfFile(file);
       const presign = (
-        await apiFetch<ApiRes<PresignRes>>('/api/v1/customer/designs/presign', {
+        await apiFetch<ApiRes<PresignRes>>(api.presign, {
           method: 'POST',
           body: JSON.stringify({ sha256, size: file.size, mime: file.type || 'application/octet-stream', fileName: file.name }),
         })
@@ -146,7 +182,7 @@ export function FileUrlOrUploadInput({ value, onChange, placeholder, className }
       if (!presign.uploadUrl || !presign.tmpKey) throw new Error('presign missing uploadUrl');
       setState({ phase: 'uploading', percent: 0 });
       await putWithProgress(presign.uploadUrl, file, (percent) => setState({ phase: 'uploading', percent }));
-      await apiFetch('/api/v1/customer/designs/confirm', {
+      await apiFetch(api.confirm, {
         method: 'POST',
         body: JSON.stringify({ tmpKey: presign.tmpKey, sha256, fileName: file.name }),
       });
@@ -154,7 +190,7 @@ export function FileUrlOrUploadInput({ value, onChange, placeholder, className }
       setState({ phase: 'processing' });
       for (let i = 0; i < POLL_MAX_TRIES; i++) {
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-        const res = await apiFetch<ApiRes<DesignFile>>(`/api/v1/customer/designs/${sha256}`);
+        const res = await apiFetch<ApiRes<DesignFile>>(api.byShaOf(sha256));
         if (res.data?.status === 'ready') {
           setState({ phase: 'done', instant: false });
           return;

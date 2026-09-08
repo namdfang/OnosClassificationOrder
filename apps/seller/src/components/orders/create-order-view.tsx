@@ -10,13 +10,14 @@ import { designAcceptKeys } from 'shared/client';
 import { CatalogProductCard } from '@/components/orders/catalog-product-card';
 import { OrdersPagination } from '@/components/orders/orders-pagination';
 import { Button } from '@/components/shared/button';
-import { FileUrlOrUploadInput } from '@/components/shared/file-url-or-upload-input';
+import { FileUrlOrUploadInput, hubDesignApi, SELLER_DESIGN_API } from '@/components/shared/file-url-or-upload-input';
 import { PageHeader } from '@/components/shared/page-header';
 import { SafeImage } from '@/components/shared/safe-image';
 import { SearchInput } from '@/components/shared/search-input';
 import { useToast } from '@/components/shared/toast';
 import { apiFetch, useApi } from '@/hooks/use-api';
 import { findMatchingVariation, groupAttributeOptions, pickColorSize } from '@/lib/catalog-variant';
+import { checkAddressFormat, normalizeAddress } from '@/lib/address-check';
 import { productLineHref, type ProductLine } from '@/lib/product-lines';
 import type { ApiRes } from '@/lib/customer-orders';
 import { fmtUSD } from '@/lib/utils';
@@ -112,6 +113,8 @@ export function CreateOrderView({
     mode === 'staff'
       ? `/api/hub/v1/admin/customer-orders/catalog?customerId=${encodeURIComponent(customerId ?? '')}&`
       : '/api/v1/customer/catalog?';
+  // Cùng lý do: ô tải file gọi API design theo đúng đường của vai đang dùng màn này.
+  const designApi = useMemo(() => (mode === 'staff' ? hubDesignApi(customerId ?? '') : SELLER_DESIGN_API), [mode, customerId]);
   const { data: catalogRes, loading: pickerLoading } = useApi<ApiRes<CustomerCatalogItem[]>>(product ? null : `${catalogBase}${catalogQuery}`);
   const pickerItems = useMemo(() => catalogRes?.data ?? [], [catalogRes]);
   const pickerTotal = catalogRes?.total ?? 0;
@@ -195,12 +198,18 @@ export function CreateOrderView({
     }
     const next: Partial<Record<AddressField, string>> = {};
     for (const f of REQUIRED) if (!address[f].trim()) next[f] = t(`customerPortal:orderNew.validation.${VALIDATION_KEY[f]}`);
-    if (address.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address.email.trim())) next.email = t('customerPortal:orderNew.validation.shippingEmailInvalid');
+    // Kiểm hình thức thật (bang, mã bưu điện, số điện thoại, số nhà) — trước
+    // 08/09/2026 form chỉ đòi "có điền", gõ gì cũng qua và địa chỉ sai chỉ lộ ra
+    // lúc mua vận đơn hoặc khi hàng bị trả về.
+    for (const [field, code] of Object.entries(checkAddressFormat(address))) {
+      if (!next[field as AddressField]) next[field as AddressField] = t(`seller:addressCheck.${code}`);
+    }
     setErrors(next);
     if (Object.keys(next).length > 0) return;
     setSubmitting(true);
     try {
-      const clean = Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, address[f].trim() || undefined]));
+      const normalized = normalizeAddress(address);
+      const clean = Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, normalized[f]?.trim() || undefined]));
       const url =
         mode === 'staff'
           ? `/api/hub/v1/admin/customer-orders?customerId=${encodeURIComponent(customerId ?? '')}`
@@ -226,14 +235,21 @@ export function CreateOrderView({
   const pages = Math.max(1, Math.ceil(pickerTotal / limit));
 
   return (
-    <div className="max-w-6xl mx-auto space-y-4">
+    // Khung cố định từ `lg` (nguyên tắc chung của Seller Portal/Hub): tiêu đề đứng
+    // yên, chỉ phần thân cuộn — không để cả trang trôi. Dưới `lg` để trang cuộn
+    // thường vì hai cột xếp dọc, khung cố định làm vùng nội dung quá hẹp.
+    <div className="max-w-6xl mx-auto flex flex-col gap-3 lg:h-full">
+      <div className="shrink-0 space-y-2">
       <Link href={productLineHref(line)} prefetch={false} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary">
         <ArrowLeft size={13} /> {t('customerPortal:productLines.' + line)}
       </Link>
-      <PageHeader title={`${t('customerPortal:orderNew.title')} · ${t('customerPortal:productLines.' + line)}`} subtitle={t('customerPortal:orderNew.subtitle')} />
+      <PageHeader title={`${t('customerPortal:orderNew.title')} · ${t('customerPortal:productLines.' + line)}`} subtitle={t('customerPortal:orderNew.subtitle')} compact />
+      </div>
+      <div className="lg:flex-1 lg:min-h-0">
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start">
-        <div className="space-y-4 min-w-0">
+      {/* Mỗi cột tự cuộn: bộ chọn sản phẩm bên trái, đơn + địa chỉ bên phải — nút "Đặt đơn" NEO ĐÁY cột phải, không trôi khỏi tầm nhìn. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start lg:items-stretch lg:h-full">
+        <div className="space-y-4 min-w-0 lg:h-full lg:overflow-y-auto scrollbar-thin lg:pr-1">
           {!product ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -324,7 +340,7 @@ export function CreateOrderView({
                     {t('customerPortal:orderNew.mockupUrl')} <span className="text-error">*</span>
                   </label>
                   <p className="text-[11px] text-text-muted">{t('customerPortal:orderNew.mockupUrlHelp')}</p>
-                  <FileUrlOrUploadInput value={mockupUrl} onChange={setMockupUrl} placeholder={t('customerPortal:orderNew.mockupUrlPlaceholder')} />
+                  <FileUrlOrUploadInput value={mockupUrl} onChange={setMockupUrl} placeholder={t('customerPortal:orderNew.mockupUrlPlaceholder')} designApi={designApi} />
                 </div>
                 {printAreas.map((area) => {
                   const required = area.isRequired !== false;
@@ -342,7 +358,12 @@ export function CreateOrderView({
                           {sizeHint && t('customerPortal:orderNew.designSizeHint', { size: sizeHint })}
                         </p>
                       )}
-                      <FileUrlOrUploadInput value={designUrls[area.key] ?? ''} onChange={(v) => setDesignUrls((prev) => ({ ...prev, [area.key]: v }))} placeholder={t('customerPortal:orderNew.designUrlPlaceholder')} />
+                      <FileUrlOrUploadInput
+                        value={designUrls[area.key] ?? ''}
+                        onChange={(v) => setDesignUrls((prev) => ({ ...prev, [area.key]: v }))}
+                        placeholder={t('customerPortal:orderNew.designUrlPlaceholder')}
+                        designApi={designApi}
+                      />
                     </div>
                   );
                 })}
@@ -355,7 +376,8 @@ export function CreateOrderView({
           )}
         </div>
 
-        <div className="lg:sticky lg:top-4 space-y-4">
+        <div className="space-y-4 lg:h-full lg:min-h-0 lg:flex lg:flex-col lg:space-y-0 lg:gap-4">
+          <div className="space-y-4 lg:flex-1 lg:min-h-0 lg:overflow-y-auto scrollbar-thin lg:pr-1">
           <div className="bg-card border border-border1 rounded-xl p-4">
             <h2 className="text-sm font-bold text-text-primary mb-3">{t('customerPortal:orderNew.cartTitle', { count: cart.length })}</h2>
             {cart.length === 0 ? (
@@ -411,7 +433,9 @@ export function CreateOrderView({
             </div>
           </div>
 
-          <div className="bg-card border border-border1 rounded-xl p-4 space-y-3">
+          </div>
+
+          <div className="bg-card border border-border1 rounded-xl p-4 space-y-3 lg:shrink-0">
             <div>
               <label className="text-[10px] font-semibold text-text-muted uppercase block mb-1">{t('customerPortal:orderNew.note')}</label>
               <textarea value={referent} onChange={(e) => setReferent(e.target.value)} placeholder={t('customerPortal:orderNew.notePlaceholder')} rows={3} className={inputCls} />
@@ -422,6 +446,7 @@ export function CreateOrderView({
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }

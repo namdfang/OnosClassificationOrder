@@ -184,6 +184,8 @@ await step('Hub — bấm mua label phải gửi cân nặng (không 400)', asyn
   if (status === 400) console.log(`  note  API từ chối vì cấu hình: ${body.slice(0, 140)}`);
 });
 
+let createUrl = '';
+
 await step('Hub — ops lên đơn hộ seller', async () => {
   await hub.goto(`${BASE}/hub/orders`, { waitUntil: 'domcontentloaded', timeout: 120000 });
   await hub.waitForTimeout(5000);
@@ -206,9 +208,66 @@ await step('Hub — ops lên đơn hộ seller', async () => {
     await hub.waitForTimeout(5000);
     body = await hub.evaluate(() => document.body.innerText);
     check('bước 3 hiện màn đặt đơn có sản phẩm', /Pick a product|Chọn sản phẩm|variations/i.test(body), body.slice(0, 120));
+    createUrl = hub.url();
   } else {
     check('chọn được seller', false, 'không thấy seller nào trong danh sách');
   }
+});
+
+await step('Hub — màn lên đơn giữ khung cố định trên laptop', async () => {
+  // 08/09/2026: nút "Đặt đơn" nằm dưới đáy trang, ops phải cuộn cả trang mới bấm
+  // được. Nguyên tắc: header/sidebar đứng yên, chỉ hai cột nội dung tự cuộn.
+  if (!createUrl) return check('có màn lên đơn để kiểm', false, 'bước trước chưa mở được');
+  for (const vp of [{ width: 1440, height: 900 }, { width: 1366, height: 768 }]) {
+    await hub.setViewportSize(vp);
+    await hub.goto(createUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await hub.waitForTimeout(5000);
+    const m = await hub.evaluate(() => {
+      const doc = document.documentElement;
+      const btn = Array.from(document.querySelectorAll('button')).find((b) => /Place order|Đặt đơn/i.test(b.textContent || ''));
+      return { scroll: doc.scrollHeight - doc.clientHeight, bottom: btn ? Math.round(btn.getBoundingClientRect().bottom) : null, vh: window.innerHeight };
+    });
+    check(`${vp.width}×${vp.height} trang không tự cuộn`, m.scroll <= 4, `dư ${m.scroll}px`);
+    check(`${vp.width}×${vp.height} nút Đặt đơn nằm trong màn hình`, m.bottom != null && m.bottom <= m.vh, `đáy nút ${m.bottom} / ${m.vh}`);
+  }
+  await hub.setViewportSize({ width: 1440, height: 950 });
+});
+
+await step('Hub — địa chỉ bậy phải bị chặn trước khi tạo đơn', async () => {
+  // 08/09/2026 (phản hồi vận hành): form chỉ đòi "có điền" — gõ gì cũng qua, địa
+  // chỉ sai chỉ lộ ra lúc mua vận đơn hoặc khi hàng bị trả về.
+  if (!createUrl) return check('có màn lên đơn để kiểm', false, 'bước trước chưa mở được');
+  await hub.goto(createUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
+  await hub.waitForTimeout(5000);
+  await hub.locator('button').filter({ hasText: /variations|biến thể/ }).first().click({ timeout: 20000 }).catch(() => {});
+  await hub.waitForTimeout(3000);
+  // Điền mọi ô URL (mockup + vùng in bắt buộc) rồi thêm vào đơn.
+  // Ô mockup + ô file thiết kế của `FileUrlOrUploadInput` khai KHÔNG có `type`,
+  // còn ô địa chỉ luôn có `type=text|email` — dựa vào đó để tách hai nhóm.
+  const urlBoxes = hub.locator('input:not([type])');
+  const n = await urlBoxes.count();
+  for (let i = 0; i < n; i++) await urlBoxes.nth(i).fill('https://example.com/e2e.png').catch(() => {});
+  const addBtn = hub.getByRole('button', { name: /Add to order|Thêm vào đơn/i }).first();
+  check('nút Thêm vào đơn bật được sau khi điền file', (await addBtn.count()) > 0 && !(await addBtn.isDisabled().catch(() => true)));
+  await addBtn.click({ timeout: 15000 }).catch(() => {});
+  await hub.waitForTimeout(2000);
+  const inCart = await hub.evaluate(() => !/\(0 products\)|\(0 sản phẩm\)/i.test(document.body.innerText));
+  check('thêm được sản phẩm vào đơn', inCart);
+
+  // Địa chỉ cố ý sai: thiếu số nhà, bang bịa, mã bưu điện chữ, điện thoại 2 số.
+  const bad = { 0: 'A', 2: 'no number st', 5: 'X', 6: 'abcde', 7: 'ZZ', 9: '12' };
+  const addrInputs = hub.locator('input[type=text], input[type=email]');
+  const total = await addrInputs.count();
+  for (const [idx, value] of Object.entries(bad)) {
+    const i = total - 11 + Number(idx);
+    if (i >= 0) await addrInputs.nth(i).fill(value).catch(() => {});
+  }
+  const before = hub.url();
+  await hub.getByRole('button', { name: /Place order|Đặt đơn/i }).first().click({ timeout: 15000 }).catch(() => {});
+  await hub.waitForTimeout(2500);
+  const errs = await hub.locator('p.text-error').count();
+  check('hiện lỗi ngay tại ô địa chỉ sai', errs > 0, `${errs} ô báo lỗi`);
+  check('không tạo đơn với địa chỉ sai', hub.url() === before, hub.url());
 });
 
 await step('Hub — trang Vận hành sản xuất', async () => {

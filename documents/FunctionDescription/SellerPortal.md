@@ -213,6 +213,17 @@ Trước đó chỉ seller tự đặt được đơn thủ công; ops muốn l�
 - **BE** (`customer-order-admin.controller.ts`, `@Auth([Admin])`): `GET admin/customer-orders/catalog?customerId=` (catalog THEO TIER seller đích — ops phải thấy đúng giá seller thấy; token nhân viên không gọi được `customer/catalog`), `POST admin/customer-orders?customerId=` (đặt hộ), `POST admin/customer-orders/push?customerId=` (đẩy hộ). Cả ba nạp khách theo id rồi gọi **chính** `placeOrder`/`pushToProduction`/`getCatalog` mà seller dùng.
 - **Đơn tạo ra ở trạng thái CHỜ ĐẨY** y như seller tự đặt — không tự đẩy, vì đẩy là chiếm mã sản xuất và vào hàng đợi xưởng, phải có chủ đích. Nút "Lên đơn hộ seller" đặt cạnh nút Làm mới ở đầu `/hub/orders*`, trang dịch vụ thì mang sẵn `?line=`.
 - Kiểm dev 08/09/2026: catalog theo tier trả 3 sản phẩm gỗ, đặt hộ tạo staging `16,37 $` mã `DG-46559-32895`; e2e phủ cả 3 bước (35 kiểm tra).
+- **Ô tải file phải đi đường của vai đang dùng màn.** `FileUrlOrUploadInput` nhận thêm `designApi` (`SELLER_DESIGN_API` hoặc `hubDesignApi(customerId)`). Bản đầu để nguyên đường seller nên ở hub bốn lệnh gọi `customer/designs/*` trả 401 — và 401 làm FE **đá nhân viên về trang đăng nhập ngay khi ô tải file hiện ra**, tức ops không lên nổi đơn. BE thêm bản sao staff `GET/POST admin/customer-orders/designs/{upload-config,presign,confirm,:sha256}` (`@Auth([Admin])`): cùng `DesignStorageService`, file vẫn ghi tên **seller đích** nên quota/dedup/vòng đời không đổi.
+- **Khung màn hình cố định trên laptop** (nguyên tắc vận hành: header/sidebar đứng yên, không cuộn cả trang): shell `/hub` và `/portal` đổi sang `lg:h-screen lg:overflow-hidden` với `main` là vùng cuộn duy nhất; màn đặt đơn `lg:h-full` chia hai cột tự cuộn riêng, thẻ ghi chú + nút **Đặt đơn** `lg:shrink-0` neo đáy cột phải. Trước đó nút Đặt đơn nằm dưới đáy trang, ops phải cuộn cả trang mới bấm được. E2E chốt ở 1440×900 và 1366×768: trang không tự cuộn (`scrollHeight - clientHeight ≤ 4`) và đáy nút nằm trong màn hình.
+- **Bước tiếp theo sau khi tạo đơn**: đơn nằm ở tab **Chờ đẩy**; mỗi hàng có nút **Đẩy SX** (`POST admin/customer-orders/push?customerId=`) → đơn sinh `OrderEntity` theo từng item và vào hàng đợi xưởng; sau đó cột Vận đơn mở nút Mua label (§9.3).
+
+#### 9.5a Kiểm hình thức địa chỉ giao hàng (08/09/2026)
+
+Phản hồi vận hành: "add địa chỉ ko có verify gì cả, điều gì cũng đc". Form cũ chỉ đòi *có điền* — địa chỉ sai chỉ lộ ra lúc mua vận đơn (hãng từ chối) hoặc khi hàng bị trả về, lúc đó đã tốn tiền in, sản xuất và ship.
+
+- `apps/seller/src/lib/address-check.ts` — `checkAddressFormat()` chạy tại trình duyệt, KHÔNG gọi mạng: tên ≥ 2 ký tự · địa chỉ ≥ 5 ký tự **và phải có chữ số** (địa chỉ Mỹ hầu như luôn có số nhà) · thành phố ≥ 2 · điện thoại 9–15 chữ số · email đúng dạng · **đơn Mỹ** (`US`/`USA`/`United States`/để trống) bắt buộc bang thuộc 59 mã USPS và mã bưu điện `#####` hoặc `#####-####`; nước khác chỉ đòi có mã bưu điện. `normalizeAddress()` cắt khoảng trắng + viết hoa mã bang trước khi gửi.
+- Lỗi hiện **ngay dưới ô sai** (khoá `seller:addressCheck.*`), gộp cùng bộ lỗi "bỏ trống" sẵn có; còn lỗi thì không gọi API.
+- Xác minh USPS thật (`shipping-vnp/check-address`) vẫn là bước riêng của hub, cố ý KHÔNG chặn đặt đơn khi hãng đang lỗi.
 
 ### 9.4 Kiểm end-to-end tự động (08/09/2026)
 
@@ -220,7 +231,7 @@ Trước đó chỉ seller tự đặt được đơn thủ công; ops muốn l�
 
 Vì sao có: hai lần liên tiếp tính năng mới làm hỏng tính năng cũ — thêm cột tick ở hub làm **cột mã đơn văng khỏi vị trí cố định** (ops phát hiện), và ghi sai kiểu `printArea` làm **catalog trả 500**. Cả hai đều nhìn 5 giây là thấy nhưng không ai soi lại mọi màn sau từng lần sửa.
 
-29 kiểm tra, phủ: seller đăng nhập → catalog (thẻ sản phẩm, số đếm theo dòng, KHÔNG 500) → chi tiết sản phẩm (bảng SKU, không lộ giá vốn) → màn đặt đơn → danh sách đơn dịch vụ (thẻ số, pill, **cột mã đơn cố định**) → import CSV (nút tra SKU + template); hub đăng nhập → danh sách đơn (**cột tick dính `left:0`, cột mã đơn dính `left:32px`**, còn cột Nội bộ, còn cột vận đơn) → nút mua label + thanh chọn hàng loạt → Vận hành (phễu 8 chặng, bảng đơn, pill ngày) → danh sách seller. Thoát mã 1 khi có kiểm tra hỏng, in rõ chỗ hỏng.
+43 kiểm tra, phủ: seller đăng nhập → catalog (thẻ sản phẩm, số đếm theo dòng, KHÔNG 500) → chi tiết sản phẩm (bảng SKU, không lộ giá vốn) → màn đặt đơn → danh sách đơn dịch vụ (thẻ số, pill, **cột mã đơn cố định**) → import CSV (nút tra SKU + template); hub đăng nhập → danh sách đơn (**cột tick dính `left:0`, cột mã đơn dính `left:32px`**, còn cột Nội bộ, còn cột vận đơn) → nút mua label + thanh chọn hàng loạt → ops lên đơn hộ seller 3 bước → **khung cố định ở 1440×900 và 1366×768** → **địa chỉ bậy bị chặn trước khi tạo đơn** (thêm sản phẩm thật vào đơn rồi gõ bang/mã bưu điện/điện thoại sai) → Vận hành (phễu 8 chặng, bảng đơn, pill ngày) → danh sách seller. Thoát mã 1 khi có kiểm tra hỏng, in rõ chỗ hỏng.
 
 ### 9.3 Mua vận đơn ngay trên `/hub/orders*` (08/09/2026)
 

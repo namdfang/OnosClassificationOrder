@@ -147,5 +147,22 @@
     "importTax": "US import tax",
     "unit": "unit",
     "lookupSku": "Look up SKU"
+  },
+  "addressCheck": {
+    "nameTooShort": "Recipient name is too short",
+    "addressTooShort": "Address is too short",
+    "addressNoNumber": "Address has no street number",
+    "cityTooShort": "City is not valid",
+    "phoneDigits": "Phone must have 9–15 digits",
+    "emailInvalid": "Email is not valid",
+    "stateRequiredUs": "US orders require a state",
+    "stateInvalidUs": "Not a valid US state code (e.g. CA, TX)",
+    "zipRequiredUs": "US orders require a ZIP code",
+    "zipInvalidUs": "US ZIP must look like 12345 or 12345-6789",
+    "zipRequired": "Postal code is required",
+    "verify": "Verify address with carrier",
+    "verifying": "Verifying…",
+    "verifyOk": "Address looks valid",
+    "verifyFail": "Carrier could not verify the address"
   }
 }

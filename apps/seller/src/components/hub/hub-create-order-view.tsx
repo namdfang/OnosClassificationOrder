@@ -37,7 +37,8 @@ export function HubCreateOrderView({ lockedLine }: { lockedLine?: ProductLine })
   const step = !line ? STEP.service : !state.seller ? STEP.seller : STEP.order;
 
   return (
-    <div className="space-y-3">
+    // Khung cố định: 2 bước chọn + màn đặt đơn nằm gọn trong một màn hình laptop.
+    <div className="flex flex-col gap-3 lg:h-full lg:min-h-0">
       <button
         type="button"
         onClick={() => (step === STEP.order ? setState({ seller: '' }) : step === STEP.seller ? setState({ line: lockedLine ?? '' }) : router.push('/hub/orders'))}
@@ -104,12 +105,14 @@ export function HubCreateOrderView({ lockedLine }: { lockedLine?: ProductLine })
 
       {step === STEP.order && line && (
         // Đúng màn seller tự đặt — giá theo tier của seller đích, cùng luật kiểm file in.
-        <CreateOrderView
-          line={line}
-          mode="staff"
-          customerId={state.seller}
-          onCreated={() => router.push(`/hub/orders/${line}?status=pending&seller=${encodeURIComponent(state.seller)}`)}
-        />
+        <div className="lg:flex-1 lg:min-h-0">
+          <CreateOrderView
+            line={line}
+            mode="staff"
+            customerId={state.seller}
+            onCreated={() => router.push(`/hub/orders/${line}?status=pending&seller=${encodeURIComponent(state.seller)}`)}
+          />
+        </div>
       )}
     </div>
   );

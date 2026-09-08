@@ -1,9 +1,11 @@
 import { ZodValidationPipe } from '@anatine/zod-nestjs';
-import { Body, Controller, Get, HttpCode, HttpStatus, NotFoundException, Post, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, NotFoundException, Param, Post, Query, UsePipes } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RoleType } from 'shared';
 import {
   AdminPlaceOrderForDto,
+  ConfirmDesignUploadDto,
+  ConfirmDesignUploadResDto,
   CustomerStagingOrderResDto,
   GetAdminCustomerOrderCountsDto,
   GetAdminCustomerOrdersDto,
@@ -12,13 +14,18 @@ import {
   GetCustomerCatalogDto,
   GetCustomerCatalogResDto,
   GetCustomerOrderCountsResDto,
+  GetDesignFileResDto,
+  GetDesignUploadConfigResDto,
   PlaceCustomerOrderDto,
+  PresignDesignUploadDto,
+  PresignDesignUploadResDto,
   PushCustomerOrdersDto,
   PushCustomerOrdersResDto,
 } from 'shared';
 
 import { Auth } from '@/decorators';
 
+import { DesignStorageService } from '../design-storage/design-storage.service';
 import { CustomerService } from '../customer/customer.service';
 import { CustomerCatalogService } from './customer-catalog.service';
 import { CustomerOrderService } from './customer-order.service';
@@ -40,6 +47,7 @@ export class CustomerOrderAdminController {
     private readonly customerOrderService: CustomerOrderService,
     private readonly customerService: CustomerService,
     private readonly customerCatalogService: CustomerCatalogService,
+    private readonly designStorageService: DesignStorageService,
   ) {}
 
   /** Nạp seller đích; khách đã xoá mềm/khoá thì không cho đặt hộ. */
@@ -109,5 +117,56 @@ export class CustomerOrderAdminController {
   @ApiOkResponse({ type: GetAdminCustomerOrderStatsResDto })
   stats(): Promise<GetAdminCustomerOrderStatsResDto> {
     return this.customerOrderService.getStatsAdmin();
+  }
+
+  /**
+   * Ba route design dưới đây là BẢN SAO STAFF của `customer/designs/*`.
+   *
+   * Vì sao phải có: ô tải file dùng chung giữa hai màn đặt đơn. Ở hub, nhân viên
+   * cầm token nhân viên nên gọi thẳng `customer/designs/*` trả 401 — và 401 làm
+   * FE đá người dùng về trang đăng nhập ngay khi ô tải file hiện ra, tức ops
+   * KHÔNG lên nổi đơn cho seller. File tải lên vẫn thuộc về seller đích (quota,
+   * vòng đời, dedup tính theo seller), nên chỉ khác chỗ nạp khách.
+   */
+  @Get('designs/upload-config')
+  @Auth([RoleType.Admin])
+  @ApiOperation({ summary: 'Giới hạn kích thước/định dạng cho ô tải file khi ops đặt đơn hộ' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetDesignUploadConfigResDto })
+  designUploadConfig(): GetDesignUploadConfigResDto {
+    return { success: true, data: this.designStorageService.getUploadConfig() };
+  }
+
+  @Post('designs/presign')
+  @Auth([RoleType.Admin])
+  @ApiOperation({ summary: 'Cấp URL tải file thẳng lên R2, ghi tên seller đích' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: PresignDesignUploadResDto })
+  async designPresign(
+    @Query() q: AdminPlaceOrderForDto,
+    @Body() dto: PresignDesignUploadDto,
+  ): Promise<PresignDesignUploadResDto> {
+    return { success: true, data: await this.designStorageService.presign(await this.target(q.customerId), dto) };
+  }
+
+  @Post('designs/confirm')
+  @Auth([RoleType.Admin])
+  @ApiOperation({ summary: 'Xác nhận tải xong → đẩy job xử lý ảnh' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: ConfirmDesignUploadResDto })
+  async designConfirm(
+    @Query() q: AdminPlaceOrderForDto,
+    @Body() dto: ConfirmDesignUploadDto,
+  ): Promise<ConfirmDesignUploadResDto> {
+    return { success: true, data: await this.designStorageService.confirm(await this.target(q.customerId), dto) };
+  }
+
+  @Get('designs/:sha256')
+  @Auth([RoleType.Admin])
+  @ApiOperation({ summary: 'Trạng thái 1 file design (FE chờ xử lý xong để hiện ảnh nhỏ)' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({ type: GetDesignFileResDto })
+  async designBySha(@Param('sha256') sha256: string): Promise<GetDesignFileResDto> {
+    return { success: true, data: await this.designStorageService.getBySha(sha256.toLowerCase()) };
   }
 }
