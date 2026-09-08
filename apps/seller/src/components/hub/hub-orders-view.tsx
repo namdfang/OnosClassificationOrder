@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image as ImageIcon, Loader2, PauseCircle, RefreshCw, Truck, Wrench } from 'lucide-react';
+import { Image as ImageIcon, Loader2, PauseCircle, Plus, RefreshCw, Truck, Wrench } from 'lucide-react';
 import type { AdminCustomerStagingOrder, CustomerOrderCounts } from 'shared';
 import { InternalStatus } from '@/components/hub/internal-status';
 import { buyInputFrom, buyLabel, canBuyLabel, canBuyLabelNow, ShipmentCell } from '@/components/hub/shipment-cell';
@@ -153,9 +154,14 @@ export function HubOrdersView({ lockedLine }: { lockedLine?: ProductLine } = {})
         subtitle={lockedLine ? t('hub:orders.subtitleLine', { line: t(`customerPortal:productLines.${lockedLine}`) }) : t('hub:orders.subtitleOms')}
         compact
         actions={
+          <div className="flex items-center gap-2 flex-wrap">
+          <Link href={lockedLine ? `/hub/orders/create?line=${lockedLine}` : '/hub/orders/create'} prefetch={false}>
+            <Button size="sm"><Plus size={13} /> {t('hub:createOrder.newOrder')}</Button>
+          </Link>
           <button type="button" onClick={refetch} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border1 bg-card text-[10px] font-bold text-text-secondary hover:bg-card-hover">
             <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />{t('hub:orders.refresh')}
           </button>
+          </div>
         }
       />
 

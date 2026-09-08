@@ -210,5 +210,16 @@
     "weightPlaceholder": "gram",
     "noWeightHint": "Enter the weight in grams to buy",
     "skippedNoWeight": "{{count}} orders missing weight — enter it per row"
+  },
+  "createOrder": {
+    "title": "Create order for a seller",
+    "subtitle": "Pick the service and the seller, the rest is the seller's own order screen",
+    "back": "Back",
+    "stepService": "Service",
+    "stepSeller": "Seller",
+    "stepOrder": "Order",
+    "pickServiceHint": "Which service is this order for?",
+    "pickSellerHint": "Which seller is this order for? Prices follow that seller's tier.",
+    "newOrder": "Create order for seller"
   }
 }

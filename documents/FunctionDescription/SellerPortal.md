@@ -204,6 +204,16 @@ Thao tác (gán designer, đổi xưởng, báo lỗi) vẫn ở app xưởng: n
 
 **Dữ liệu hub luôn mới (07/09/2026):** staging `customer_orders` được bồi tăng dần từ `orders` cho mọi khách (cron 5' + trước mỗi lần admin đọc — `CustomerOrderIntake.md`), nên lọc "Hôm nay" ở `/hub/orders*` có đơn xưởng vừa import, không cần khách mở portal.
 
+### 9.5 Ops lên đơn HỘ seller `/hub/orders/create` (08/09/2026)
+
+Trước đó chỉ seller tự đặt được đơn thủ công; ops muốn lên đơn hộ phải mạo danh. Khuôn lấy từ wizard của thghub (`components/oms/order-create-wizard.tsx`, cùng một component chạy `mode="seller"` ở `/portal/orders/create` và `mode="staff"` ở `/oms/create`, khác đúng bước "Select Seller").
+
+- **`components/hub/hub-create-order-view.tsx`**: 3 bước — ① chọn dịch vụ (6 dòng sản phẩm) ② chọn seller (`SellerFilterPicker` dùng lại) ③ **nhúng thẳng `CreateOrderView`** với `mode="staff"` + `customerId`. Dải bước hiện ở đầu, bấm Quay lại sửa được bước trước; bộ chọn nằm trên URL (`line`, `seller`) nên chia sẻ link được.
+- **KHÔNG nhân bản màn đặt đơn.** `CreateOrderView` nhận thêm `mode`/`customerId`/`onCreated`: `seller` gọi `customer/orders` như cũ, `staff` gọi `admin/customer-orders?customerId=…`. Lệch một luật kiểm (đòi file in theo `printArea`, giá theo tier, sinh `productionId`) giữa hai bản là sinh đơn hỏng mà không ai biết.
+- **BE** (`customer-order-admin.controller.ts`, `@Auth([Admin])`): `GET admin/customer-orders/catalog?customerId=` (catalog THEO TIER seller đích — ops phải thấy đúng giá seller thấy; token nhân viên không gọi được `customer/catalog`), `POST admin/customer-orders?customerId=` (đặt hộ), `POST admin/customer-orders/push?customerId=` (đẩy hộ). Cả ba nạp khách theo id rồi gọi **chính** `placeOrder`/`pushToProduction`/`getCatalog` mà seller dùng.
+- **Đơn tạo ra ở trạng thái CHỜ ĐẨY** y như seller tự đặt — không tự đẩy, vì đẩy là chiếm mã sản xuất và vào hàng đợi xưởng, phải có chủ đích. Nút "Lên đơn hộ seller" đặt cạnh nút Làm mới ở đầu `/hub/orders*`, trang dịch vụ thì mang sẵn `?line=`.
+- Kiểm dev 08/09/2026: catalog theo tier trả 3 sản phẩm gỗ, đặt hộ tạo staging `16,37 $` mã `DG-46559-32895`; e2e phủ cả 3 bước (35 kiểm tra).
+
 ### 9.4 Kiểm end-to-end tự động (08/09/2026)
 
 `apps/seller/e2e/run.mjs` — chạy `pnpm --filter ./apps/seller e2e`. Không thêm dependency: dùng Playwright có sẵn trên máy (`PLAYWRIGHT_PATH`), mặc định soi `http://127.0.0.1:3017`, đổi bằng `E2E_BASE`.

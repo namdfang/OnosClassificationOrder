@@ -184,6 +184,33 @@ await step('Hub — bấm mua label phải gửi cân nặng (không 400)', asyn
   if (status === 400) console.log(`  note  API từ chối vì cấu hình: ${body.slice(0, 140)}`);
 });
 
+await step('Hub — ops lên đơn hộ seller', async () => {
+  await hub.goto(`${BASE}/hub/orders`, { waitUntil: 'domcontentloaded', timeout: 120000 });
+  await hub.waitForTimeout(5000);
+  const entry = await hub.locator('a[href^="/hub/orders/create"]').count();
+  check('có lối vào lên đơn hộ seller', entry > 0, `${entry} link`);
+  await hub.goto(`${BASE}/hub/orders/create`, { waitUntil: 'domcontentloaded', timeout: 120000 });
+  await hub.waitForTimeout(5000);
+  let body = await hub.evaluate(() => document.body.innerText);
+  check('bước 1 chọn dịch vụ', /Service|dịch vụ/i.test(body) && /Wood|Gỗ/i.test(body));
+  await hub.getByRole('button', { name: /^Wood$|^Gỗ$/ }).first().click();
+  await hub.waitForTimeout(3000);
+  body = await hub.evaluate(() => document.body.innerText);
+  check('bước 2 chọn seller', /Seller|seller/i.test(body));
+  // Chọn seller đầu tiên trong danh sách thả xuống
+  await hub.getByRole('button', { name: /All sellers|Mọi seller/i }).first().click();
+  await hub.waitForTimeout(2500);
+  const opt = hub.locator('button:has-text("@")').first();
+  if ((await opt.count()) > 0) {
+    await opt.click();
+    await hub.waitForTimeout(5000);
+    body = await hub.evaluate(() => document.body.innerText);
+    check('bước 3 hiện màn đặt đơn có sản phẩm', /Pick a product|Chọn sản phẩm|variations/i.test(body), body.slice(0, 120));
+  } else {
+    check('chọn được seller', false, 'không thấy seller nào trong danh sách');
+  }
+});
+
 await step('Hub — trang Vận hành sản xuất', async () => {
   await hub.goto(`${BASE}/hub/operations`, { waitUntil: 'domcontentloaded', timeout: 120000 });
   await hub.waitForTimeout(7000);

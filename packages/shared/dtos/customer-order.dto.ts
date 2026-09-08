@@ -723,3 +723,13 @@ export const AdminCustomerOrderStatsZod = z.object({
 export type AdminCustomerOrderStats = z.infer<typeof AdminCustomerOrderStatsZod>;
 export const GetAdminCustomerOrderStatsResZod = ResZod.extend({ data: AdminCustomerOrderStatsZod });
 export class GetAdminCustomerOrderStatsResDto extends createZodDto(extendApi(GetAdminCustomerOrderStatsResZod)) {}
+
+/* ── Admin đặt đơn / đẩy đơn THAY seller ở khu `/hub` ────────────────────────
+ * Ops bên hub cần lên đơn hộ seller (khuôn `mode="staff"` của wizard thghub:
+ * thêm đúng một bước "chọn seller", phần còn lại y hệt màn seller tự đặt).
+ * Không nhân bản nghiệp vụ: controller nạp khách theo `customerId` rồi gọi
+ * CHÍNH `placeOrder` / `pushToProduction` mà seller dùng.
+ */
+export const AdminPlaceOrderForZod = z.object({ customerId: IDZod });
+export class AdminPlaceOrderForDto extends createZodDto(extendApi(AdminPlaceOrderForZod)) {}
+

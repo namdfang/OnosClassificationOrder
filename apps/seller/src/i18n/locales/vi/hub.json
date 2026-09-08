@@ -210,5 +210,16 @@
     "weightPlaceholder": "gram",
     "noWeightHint": "Nhập cân nặng (gram) rồi mới mua được",
     "skippedNoWeight": "{{count}} đơn thiếu cân nặng — nhập tay ở từng dòng"
+  },
+  "createOrder": {
+    "title": "Lên đơn hộ seller",
+    "subtitle": "Chọn dịch vụ và seller, phần còn lại giống hệt màn seller tự đặt",
+    "back": "Quay lại",
+    "stepService": "Chọn dịch vụ",
+    "stepSeller": "Chọn seller",
+    "stepOrder": "Nhập đơn",
+    "pickServiceHint": "Đơn thuộc dịch vụ nào?",
+    "pickSellerHint": "Đơn này đặt cho seller nào? Giá sẽ lấy theo hạng của seller đó.",
+    "newOrder": "Lên đơn hộ seller"
   }
 }

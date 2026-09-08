@@ -70,7 +70,26 @@ function useDebounced<T>(value: T, ms: number): T {
 
 const inputCls = 'w-full px-3 py-2 rounded-lg border border-border1 bg-card text-xs text-text-primary outline-none focus:border-accent';
 
-export function CreateOrderView({ line }: { line: ProductLine }) {
+/**
+ * Màn đặt đơn dùng CHUNG cho hai vai (khuôn `order-create-wizard` của thghub:
+ * cùng một component, `mode="seller"` và `mode="staff"` chỉ khác bước chọn seller):
+ *
+ *  - `seller` (mặc định): đơn thuộc chính người đang đăng nhập, gọi `customer/orders`.
+ *  - `staff`: ops ở `/hub` đặt hộ — kèm `customerId` của seller đích, gọi
+ *    `admin/customer-orders?customerId=…` qua proxy hub. Catalog cũng đọc bằng
+ *    đường hub để nhân viên không cần token khách.
+ */
+export function CreateOrderView({
+  line,
+  mode = 'seller',
+  customerId,
+  onCreated,
+}: {
+  line: ProductLine;
+  mode?: 'seller' | 'staff';
+  customerId?: string;
+  onCreated?: () => void;
+}) {
   const { t } = useTranslation(['customerPortal', 'seller']);
   const { toast } = useToast();
   const router = useRouter();
@@ -87,7 +106,13 @@ export function CreateOrderView({ line }: { line: ProductLine }) {
     return p.toString();
   }, [page, limit, q, line]);
   const [product, setProduct] = useState<CustomerCatalogItem | null>(null);
-  const { data: catalogRes, loading: pickerLoading } = useApi<ApiRes<CustomerCatalogItem[]>>(product ? null : `/api/v1/customer/catalog?${catalogQuery}`);
+  // Staff đọc catalog THEO TIER của seller đích (endpoint riêng ở khu admin) —
+  // token nhân viên không gọi được `customer/catalog`, và giá phải khớp giá seller thấy.
+  const catalogBase =
+    mode === 'staff'
+      ? `/api/hub/v1/admin/customer-orders/catalog?customerId=${encodeURIComponent(customerId ?? '')}&`
+      : '/api/v1/customer/catalog?';
+  const { data: catalogRes, loading: pickerLoading } = useApi<ApiRes<CustomerCatalogItem[]>>(product ? null : `${catalogBase}${catalogQuery}`);
   const pickerItems = useMemo(() => catalogRes?.data ?? [], [catalogRes]);
   const pickerTotal = catalogRes?.total ?? 0;
 
@@ -176,7 +201,11 @@ export function CreateOrderView({ line }: { line: ProductLine }) {
     setSubmitting(true);
     try {
       const clean = Object.fromEntries(ADDRESS_FIELDS.map((f) => [f, address[f].trim() || undefined]));
-      const res = await apiFetch<ApiRes<CustomerStagingOrder>>('/api/v1/customer/orders', {
+      const url =
+        mode === 'staff'
+          ? `/api/hub/v1/admin/customer-orders?customerId=${encodeURIComponent(customerId ?? '')}`
+          : '/api/v1/customer/orders';
+      const res = await apiFetch<ApiRes<CustomerStagingOrder>>(url, {
         method: 'POST',
         body: JSON.stringify({
           items: cart.map((it) => ({ type: it.type, color: it.color, size: it.size, mockupUrl: it.mockupUrl, printMethod: it.printMethod, quantity: it.quantity, designs: it.designs })),
@@ -185,7 +214,8 @@ export function CreateOrderView({ line }: { line: ProductLine }) {
         }),
       });
       toast('success', t('customerPortal:orderNew.successPending', { count: res.data?.items?.length ?? cart.length }));
-      router.push(`${productLineHref(line)}?status=pending`);
+      if (onCreated) onCreated();
+      else router.push(`${productLineHref(line)}?status=pending`);
     } catch (e) {
       toast('error', (e as Error).message);
     } finally {
