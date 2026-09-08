@@ -1,0 +1,66 @@
+# Cổng kiểm code trước khi ra prod.
+#
+# Vì sao có (08/09/2026): nhóm chốt luồng "code lên nhánh `dev`, gộp vào `main`
+# là ra prod". Muốn `main` an toàn thì mỗi lần đẩy phải có người gác — đây là
+# người gác đó: type-check toàn workspace, lint, và 555 test của apps/api.
+# Máy prod CHỈ deploy khi commit tương ứng đã xanh ở đây (xem `prod-autodeploy.sh`).
+#
+# Test KHÔNG cần MongoDB/Redis/RabbitMQ (đã đo: 38 suite chạy 24 giây trên máy
+# trống), nên không khai service container nào.
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # Gói Zalo (@zero-126/*) nằm ở registry riêng; thiếu khoá là `pnpm install`
+      # trả 401 giữa chừng với thông báo khó hiểu, nên chặn sớm và nói rõ.
+      - name: Kiểm secret GHCR_TOKEN
+        run: |
+          if [ -z "${{ secrets.GHCR_TOKEN }}" ]; then
+            echo "::error::Thiếu secret GHCR_TOKEN (Settings → Secrets and variables → Actions)."
+            echo "Gói @zero-126/* nằm ở npm.pkg.github.com nên không cài được nếu thiếu."
+            exit 1
+          fi
+
+      # Bám ĐÚNG bộ công cụ của repo: `packageManager` ghim pnpm 8.6.10 và
+      # lockfile là v6 — dùng pnpm 9 sẽ đòi viết lại lockfile ngay bước cài.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Cài phụ thuộc
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: pnpm install --frozen-lockfile
+
+      # `shared` và `core` là dist đã build; thiếu bước này thì type-check thấy
+      # mọi DTO thành `any` và lint/test đọc bản cũ.
+      - name: Build shared + core
+        run: pnpm --filter shared build && pnpm --filter core build
+
+      - name: Type-check toàn workspace
+        run: pnpm build-types
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test apps/api
+        run: pnpm --filter ./apps/api test

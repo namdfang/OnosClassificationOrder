@@ -82,15 +82,24 @@ node -e "require.resolve('@zero-126/zalo-sdk/next', { paths: ['$REPO_DIR/apps/ap
   exit 0
 fi
 
-BRANCH="${1:-main}"
+# Tham số 1: tên nhánh, HOẶC một SHA đầy đủ. Nhận SHA để bản deploy tự động
+# ra ĐÚNG commit đã được CI chấm xanh — nếu chỉ nhận tên nhánh thì ai push chen
+# vào giữa lúc build là prod ra bản chưa ai kiểm.
+TARGET="${1:-main}"
 
 # ─── Ghi lại commit đang chạy TRƯỚC khi đụng vào gì ──────────────────
 git rev-parse HEAD > "$STATE_FILE"
 echo "→ Bản đang chạy (để lùi nếu cần): $(git rev-parse --short HEAD)"
 
-echo "→ Kéo code mới từ origin/$BRANCH (reset --hard để local change không chặn)..."
-git fetch origin "$BRANCH"
-git reset --hard "origin/$BRANCH"
+if echo "$TARGET" | grep -qE '^[0-9a-f]{40}$'; then
+  echo "→ Kéo đúng commit $TARGET (reset --hard để local change không chặn)..."
+  git fetch origin main
+  git reset --hard "$TARGET"
+else
+  echo "→ Kéo code mới từ origin/$TARGET (reset --hard để local change không chặn)..."
+  git fetch origin "$TARGET"
+  git reset --hard "origin/$TARGET"
+fi
 echo "  → Sắp deploy: $(git rev-parse --short HEAD) — $(git log -1 --format='%s')"
 
 echo "→ Cài dependencies..."

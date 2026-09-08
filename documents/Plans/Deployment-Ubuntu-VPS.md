@@ -872,3 +872,34 @@ server {
 ### 8.2 Bật redirect `/customer/*` ở app admin
 
 Sau khi seller chạy ổn: đặt `VITE_SELLER_URL=https://seller.onosfactory.com` trong `apps/web/.env.production` rồi build lại web (`SellerRedirectGate` ở `apps/web/src/App.tsx`). Nút "Xem với tư cách khách" (mạo danh) cũng chuyển sang seller theo biến này.
+
+---
+
+## 15. CI + tự deploy prod (08/09/2026)
+
+Luồng nhóm chốt: **code lên nhánh `dev`** → máy dev tự cập nhật trong 1 phút (SellerPortal.md §8.2) → **gộp `dev` vào `main`** → GitHub Actions kiểm → prod tự ra bản mới.
+
+### 15.1 Cổng kiểm — `.github/workflows/ci.yml`
+
+Chạy khi push hoặc mở PR vào `main`/`dev`, trên runner của GitHub: cài phụ thuộc (pnpm **8.6.10**, Node **20.20.2** — ghim theo `packageManager`/`engines`, dùng pnpm 9 là lockfile v6 đòi viết lại), build `shared` + `core`, `pnpm build-types`, `pnpm lint`, rồi 555 test của `apps/api`. Test không cần MongoDB/Redis/RabbitMQ nên không khai service container (đo: 38 suite, 24 giây).
+
+**Cần một secret duy nhất: `GHCR_TOKEN`** (Settings → Secrets and variables → Actions). Gói Zalo `@zero-126/*` nằm ở `npm.pkg.github.com`; thiếu khoá thì `pnpm install` trả 401 giữa chừng nên workflow chặn sớm và in rõ lý do. Thêm secret cần quyền admin repo.
+
+### 15.2 Prod tự deploy — `prod-autodeploy.sh`
+
+Cài trên MÁY PROD: `./prod-autodeploy.sh --install` (timer 2 phút). Mỗi lượt: fetch `main`, có commit mới thì **hỏi GitHub xem commit đó đã xanh chưa** rồi mới deploy.
+
+- Kiểu **kéo** chứ không phải đẩy: repo đang public nên đọc `check-runs` không cần khoá, không phải cất secret nào ở GitHub, không mở cổng SSH cho runner, và không cần quyền admin repo.
+- Chưa có lượt kiểm nào cho commit đó → **không deploy** (thà đứng yên còn hơn ra bản không ai kiểm). Đang chạy → đợi lượt sau. Đỏ → bỏ hẳn commit đó, ghi `/var/lib/onos-prod-autodeploy.skip`, bắn Telegram.
+- Truyền **thẳng SHA đã xanh** vào `deploy.sh` (tham số 1 nay nhận cả SHA đầy đủ lẫn tên nhánh) — nếu để nó tự lấy đầu nhánh thì ai push chen vào giữa lúc build là prod ra bản chưa ai kiểm.
+- Deploy hỏng → **tự chạy `./deploy.sh --rollback`** và báo Telegram; lùi cũng hỏng thì báo mức nặng hơn để có người vào máy.
+- Công tắc tạm dừng: `touch /var/www/onosfactory/DEPLOY_PAUSE`. Nhật ký: `/var/log/onos-prod-autodeploy.log`.
+- Telegram dùng lại `TELEGRAM_BOT_TOKEN` + `TELEGRAM_NOTIFICATION_CHANNEL_ID` trong `apps/api/.env` của prod, không thêm biến mới; thiếu thì im lặng bỏ qua.
+
+### 15.3 Việc chỉ chủ repo làm được
+
+| Việc | Vì sao |
+|---|---|
+| Thêm secret `GHCR_TOKEN` | Không có nó CI không cài được phụ thuộc |
+| Bật branch protection cho `main` (bắt buộc qua PR + CI xanh) | Đây mới là chốt chặn thật của luật "merge vào main là ra prod" |
+| Cân nhắc để repo public hay chuyển private | Repo đang **public**; chính vì vậy prod đọc được trạng thái CI mà không cần khoá. Chuyển private thì `prod-autodeploy.sh` phải thêm token đọc |

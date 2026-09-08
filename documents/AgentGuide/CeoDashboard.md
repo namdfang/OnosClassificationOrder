@@ -4,7 +4,7 @@
 > - `GET /api/v1/agent/ceo-overview?from=YYYY-MM-DD&to=YYYY-MM-DD` — bộ số 7 khối + kết luận theo luật (`findings`).
 > - `GET /api/v1/agent/ceo-report?from&to` — nhận định tiếng Việt hệ thống đã viết cho kỳ đó (null nếu chưa có).
 >
-> Đây là **đúng số CEO đang nhìn** trên `/adm/ceo`. Khi báo cáo ngày/tuần/tháng, dùng hai lệnh này thay vì tự cộng từ `orders` — cộng tay sẽ lệch (bộ lọc đơn hủy/xưởng US/đơn treo, luật chặng, luật "đủ tuổi" của SLA).
+> Đây là **đúng số CEO đang nhìn** trên bảng điều hành nội bộ. Khi báo cáo ngày/tuần/tháng, dùng hai lệnh này thay vì tự cộng từ `orders` — cộng tay sẽ lệch (bộ lọc đơn hủy/xưởng US/đơn treo, luật chặng, luật "đủ tuổi" của SLA).
 
 ## Kỳ nào gọi thế nào
 
