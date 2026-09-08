@@ -204,6 +204,14 @@ Thao tác (gán designer, đổi xưởng, báo lỗi) vẫn ở app xưởng: n
 
 **Dữ liệu hub luôn mới (07/09/2026):** staging `customer_orders` được bồi tăng dần từ `orders` cho mọi khách (cron 5' + trước mỗi lần admin đọc — `CustomerOrderIntake.md`), nên lọc "Hôm nay" ở `/hub/orders*` có đơn xưởng vừa import, không cần khách mở portal.
 
+### 9.4 Kiểm end-to-end tự động (08/09/2026)
+
+`apps/seller/e2e/run.mjs` — chạy `pnpm --filter ./apps/seller e2e`. Không thêm dependency: dùng Playwright có sẵn trên máy (`PLAYWRIGHT_PATH`), mặc định soi `http://127.0.0.1:3017`, đổi bằng `E2E_BASE`.
+
+Vì sao có: hai lần liên tiếp tính năng mới làm hỏng tính năng cũ — thêm cột tick ở hub làm **cột mã đơn văng khỏi vị trí cố định** (ops phát hiện), và ghi sai kiểu `printArea` làm **catalog trả 500**. Cả hai đều nhìn 5 giây là thấy nhưng không ai soi lại mọi màn sau từng lần sửa.
+
+29 kiểm tra, phủ: seller đăng nhập → catalog (thẻ sản phẩm, số đếm theo dòng, KHÔNG 500) → chi tiết sản phẩm (bảng SKU, không lộ giá vốn) → màn đặt đơn → danh sách đơn dịch vụ (thẻ số, pill, **cột mã đơn cố định**) → import CSV (nút tra SKU + template); hub đăng nhập → danh sách đơn (**cột tick dính `left:0`, cột mã đơn dính `left:32px`**, còn cột Nội bộ, còn cột vận đơn) → nút mua label + thanh chọn hàng loạt → Vận hành (phễu 8 chặng, bảng đơn, pill ngày) → danh sách seller. Thoát mã 1 khi có kiểm tra hỏng, in rõ chỗ hỏng.
+
 ### 9.3 Mua vận đơn ngay trên `/hub/orders*` (08/09/2026)
 
 Hôm nay ops lên đơn ở OnosPod rồi sang OnosExpress mua label — hai hệ, hai lần đăng nhập. Hub gom lại: ops thấy đơn nào chưa có vận đơn thì mua ngay tại hàng, hoặc tick nhiều đơn mua một lượt (khuôn ops bên thghub).

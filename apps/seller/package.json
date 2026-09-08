@@ -10,7 +10,8 @@
     "lint:fix": "eslint --fix --cache",
     "build-types": "tsc --noEmit",
     "sync-i18n": "node scripts/sync-i18n.mjs",
-    "prebuild": "node scripts/sync-i18n.mjs"
+    "prebuild": "node scripts/sync-i18n.mjs",
+    "e2e": "node e2e/run.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",
