@@ -5,6 +5,7 @@
 # Usage:
 #   ./deploy.sh            deploy origin/main (mặc định)
 #   ./deploy.sh <nhánh>    deploy một nhánh khác (dùng khi main có commit chưa muốn lên)
+#   ./deploy.sh <sha>      deploy ĐÚNG một commit (nhận SHA đầy đủ 40 ký tự)
 #   ./deploy.sh --rollback lùi về bản deploy trước
 #   ./deploy.sh --status   xem đang chạy commit nào, có bản nào lùi về được
 #
