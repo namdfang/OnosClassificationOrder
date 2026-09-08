@@ -1,0 +1,85 @@
+# Cổng kiểm RIÊNG của nhánh `tuantran`.
+#
+# Vì sao khoanh theo nhánh (08/09/2026): nhóm chốt ai làm nấy tự kiểm rồi tự đẩy
+# prod, nên không có cổng chung ở `main`. File này chỉ chạy khi đẩy lên nhánh
+# `tuantran` — GitHub đọc workflow theo NHÁNH của cú push, nên nhánh của người
+# khác không bao giờ kích hoạt nó và cũng không thấy lượt chạy đỏ nào.
+#
+# Nó tự co giãn theo quyền hiện có:
+#  - KHÔNG có secret GHCR_TOKEN → kiểm phần không dính registry riêng
+#    (`shared` + `core` + toàn bộ `apps/seller`). Đã đo trên clone sạch: cài và
+#    type-check được, không cần khoá.
+#  - CÓ secret → kiểm thêm `apps/api`: type-check toàn workspace, lint, và 555
+#    test. Gói Zalo `@zero-126/*` nằm ở npm.pkg.github.com nên phần này bắt buộc
+#    có khoá; thêm secret cần quyền admin repo.
+name: CI (tuantran)
+
+on:
+  push:
+    branches: [tuantran]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-tuantran
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # Bám ĐÚNG bộ công cụ của repo: `packageManager` ghim pnpm 8.6.10 và
+      # lockfile là v6 — dùng pnpm 9 sẽ đòi viết lại lockfile ngay bước cài.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: pnpm
+
+      - name: Xác định phạm vi kiểm
+        id: scope
+        run: |
+          if [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
+            echo "full=true" >> "$GITHUB_OUTPUT"
+            echo "Có GHCR_TOKEN → kiểm toàn workspace."
+          else
+            echo "full=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Thiếu secret GHCR_TOKEN nên bỏ qua apps/api và apps/web (gói @zero-126/* ở registry riêng). Thêm secret ở Settings → Secrets and variables → Actions để kiểm đầy đủ."
+          fi
+
+      # ── Không có khoá: chỉ phần cài được ─────────────────────────────
+      - name: Cài (shared + core + seller)
+        if: steps.scope.outputs.full == 'false'
+        run: pnpm install --frozen-lockfile --filter ./apps/seller...
+      - name: Build shared + core
+        if: steps.scope.outputs.full == 'false'
+        run: pnpm --filter shared build && pnpm --filter core build
+      - name: Type-check seller
+        if: steps.scope.outputs.full == 'false'
+        run: pnpm --filter ./apps/seller build-types
+      - name: Lint seller
+        if: steps.scope.outputs.full == 'false'
+        run: pnpm --filter ./apps/seller lint
+
+      # ── Có khoá: kiểm đầy đủ ─────────────────────────────────────────
+      - name: Cài toàn workspace
+        if: steps.scope.outputs.full == 'true'
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: pnpm install --frozen-lockfile
+      - name: Build shared + core (đầy đủ)
+        if: steps.scope.outputs.full == 'true'
+        run: pnpm --filter shared build && pnpm --filter core build
+      - name: Type-check toàn workspace
+        if: steps.scope.outputs.full == 'true'
+        run: pnpm build-types
+      - name: Lint
+        if: steps.scope.outputs.full == 'true'
+        run: pnpm lint
+      - name: Test apps/api
+        if: steps.scope.outputs.full == 'true'
+        run: pnpm --filter ./apps/api test
