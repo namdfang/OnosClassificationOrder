@@ -72,7 +72,8 @@
     "impersonate": "Impersonate",
     "zaloGroups": "Seller Support",
     "zaloChat": "Zalo chat",
-    "ceoDashboard": "CEO Dashboard"
+    "ceoDashboard": "CEO Dashboard",
+    "telegram": "Telegram"
   },
   "header": {
     "toggleSidebar": "Toggle sidebar",

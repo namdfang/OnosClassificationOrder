@@ -120,7 +120,26 @@ Entry sidebar "Chat Zalo" nằm cạnh "Nhóm Zalo", **`onlyForRoles: [SuperAdmi
   `httpAdapter` là `null`. `ZaloProxyService.onModuleInit` phải kiểm tra trước khi gắn hook, không thì tiến trình
   đó sập lúc khởi động (đã dính một lần).
 - **Engine pin theo digest**, không dùng `:latest`. Có bản mới thì engine tự ghi log "CÓ BẢN ENGINE MỚI" → đọc
-  changelog ở https://zalo.autonow.vn → đổi digest trong compose → `docker compose pull && up -d`.
+  changelog ở https://zalo.autonow.vn (hoặc `curl -s https://zalo.autonow.vn/api/version`) → đổi digest trong
+  compose → `docker compose pull && up -d`. **Sao lưu DB engine trước khi nâng cấp**:
+  `docker exec onos-zalo-engine-db pg_dump -U zalo zalo_engine | gzip > ~/zalo-engine-backup-$(date +%F).sql.gz`.
+  Bản đang chạy: `20260909-dd6c38a` / gói `1.44.1` (09/09/2026). Giữ `ZALO_MULTI_ENCRYPTION_KEY` và volume DB thì
+  phiên Zalo sống qua lần nâng cấp — đo lần này: 6 phiên khôi phục đủ, listener nối lại trong ~10 giây.
+- **Máy dev cũng chạy một engine riêng** (`docker/zalo-engine` trên máy hub, cùng cổng 4001) — nâng cấp thì làm
+  cả hai, không thì dev với prod lệch bản và lỗi chỉ hiện ở một bên.
+
+## 5b. Khu Telegram (09/09/2026 — engine `20260909-dd6c38a`, gói `1.44.1`)
+
+Nhà cung cấp thêm khu Telegram vào CÙNG engine: quản lý bot, đọc và trả lời chat/nhóm/topic, phân quyền theo cùng cơ chế của khu Zalo.
+
+- **Bật bằng env engine `TELEGRAM_ENABLED=1`** (đã đặt sẵn trong `docker/zalo-engine/docker-compose.yml`). Thiếu biến này thì engine tắt khu đó và giao diện hiện đúng câu hướng dẫn đặt biến.
+- **Trang**: `/adm/telegram` (`apps/web/src/pages/telegram/index.tsx`) render `TelegramWorkspace` của gói. Menu sidebar `sidebar.telegram`, **không gắn mã quyền của hệ mình** — y như màn Zalo, phân quyền nằm ở dialog "Phân quyền" của engine.
+- **Proxy**: đường thứ hai `TELEGRAM_PROXY_PREFIX = '/api/telegram'` dùng **CÙNG factory** `createZaloProxyHandler` với tuỳ chọn mới `enginePrefix` (có từ 1.44.1). Không chép lại phần ký HMAC / lọc header / trần chờ — chép tay là chỗ để lệch mỗi lần vendor ra bản mới.
+- **Phiên dùng chung**: `cookiePhien()` nay trả **một `Set-Cookie` cho mỗi đường proxy** (`ZALO_COOKIE_PATHS`), vì cookie cũ khoá `Path=/api/zalo-multi` nên không đi kèm request `/api/telegram`. Cố ý KHÔNG nới thành `Path=/api` — nới ra là cookie đi kèm mọi lời gọi `api/v1` của app.
+- **Telegram chưa có đường socket riêng**: `chuyenTiep()` chỉ coi `socket` là socket khi đi qua tiền tố Zalo.
+- **Cần một bot**: mở @BotFather → `/newbot` → dán token vào nút "Thêm bot" trong màn hình → thêm bot vào nhóm cần theo dõi. Bot bật privacy mode thì chỉ thấy tin nhắc `@bot`, lệnh, và tin trả lời bot — muốn đọc hết nhóm phải tắt privacy ở BotFather.
+- Kiểm 09/09/2026 trên dev: `/api/telegram/*` không cookie trả 401, có cookie thì màn hình lên đúng trạng thái "chưa có bot" lấy từ engine.
+
 - **Engine chỉ nghe loopback** (`127.0.0.1:4001`). Nó đọc được mọi hội thoại nên tuyệt đối không mở ra mạng ngoài;
   mọi lối vào phải đi qua proxy của app.
 

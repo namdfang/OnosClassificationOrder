@@ -12,7 +12,7 @@
 # Chạy:  cd docker/zalo-engine && docker compose up -d     (cần ./.env, xem .env.example)
 services:
   zalo-engine:
-    image: ghcr.io/zero-126/zalo-engine@sha256:35fa5c9a7a96bd80993bc03a1170ae5a8ad4b8b412bda41ee94a084bcd915d9b
+    image: ghcr.io/zero-126/zalo-engine@sha256:50b445c25cf282cce5248e5f9f34cf19b3c83bc0dbe94fc138e215e1f321f312
     container_name: onos-zalo-engine
     restart: unless-stopped
     environment:
@@ -21,6 +21,9 @@ services:
       # PHẢI trùng `ZALO_ENGINE_SECRET` của API (proxy ký x-service-token bằng khoá này).
       ZALO_ENGINE_SECRET: ${ZALO_ENGINE_SECRET}
       ZALO_LICENSE_KEY: ${ZALO_LICENSE_KEY}
+      # Bật khu Telegram (engine 20260909 trở đi). Không đặt = khu này tắt và
+      # giao diện hiện đúng câu "đặt TELEGRAM_ENABLED=1 cho engine rồi khởi động lại".
+      TELEGRAM_ENABLED: '1'
       # AES key mã hoá phiên đăng nhập Zalo. ĐỔI = mất hết phiên, phải quét QR lại.
       ZALO_MULTI_ENCRYPTION_KEY: ${ZALO_ENCRYPTION_KEY}
       UPLOAD_DIR: /app/uploads

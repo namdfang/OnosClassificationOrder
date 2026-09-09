@@ -41,6 +41,7 @@ export const PATHS = {
   ZALO_GROUPS: '/adm/zalo-groups',
   ZALO_CHAT: '/adm/zalo',
   ZALO_CHAT_SETTINGS: '/adm/zalo/settings',
+  TELEGRAM: '/adm/telegram',
   USERS: '/adm/users',
   DEPARTMENTS: '/adm/departments',
   ROLES: '/adm/roles',

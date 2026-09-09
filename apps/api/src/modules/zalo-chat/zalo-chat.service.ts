@@ -7,7 +7,7 @@ import { RoleType, Status } from 'shared';
 
 import { ApiConfigService } from '../../shared/services/api-config.service';
 import { UserEntity } from '../user/user.entity';
-import { ZALO_SESSION_COOKIE, ZALO_SESSION_TTL_SEC } from './zalo-chat.constants';
+import { ZALO_COOKIE_PATHS, ZALO_SESSION_COOKIE, ZALO_SESSION_TTL_SEC } from './zalo-chat.constants';
 
 /** Payload của cookie phiên — vừa đủ để proxy dựng 4 header danh tính. */
 interface PhienZalo {
@@ -95,14 +95,14 @@ export class ZaloChatService {
     return f?.shortName || f?.name || undefined;
   }
 
-  /** Ký cookie phiên. Trả về chuỗi `Set-Cookie` đầy đủ. */
+  /** Ký cookie phiên. Trả MỘT chuỗi `Set-Cookie` cho MỖI đường proxy (Zalo + Telegram). */
   async cookiePhien(
     userId: string,
     displayName: string,
     vai: ZaloProxyUser['role'],
     nhan?: string,
     pv?: string[],
-  ): Promise<string> {
+  ): Promise<string[]> {
     const token = await this.jwtService.signAsync(
       { sub: userId, ten: displayName, vai, nhan, pv } satisfies PhienZalo,
       { privateKey: this.configService.authConfig.privateKey, expiresIn: ZALO_SESSION_TTL_SEC },
@@ -111,21 +111,19 @@ export class ZaloChatService {
     // `Path` hẹp đúng đường proxy: cookie này không đi kèm mọi request của app.
     // `SameSite=Lax` đủ vì SDK gọi same-origin; `Secure` chỉ bật ở production
     // (dev có thể chạy http trên máy trong mạng).
-    const phan = [
-      `${ZALO_SESSION_COOKIE}=${token}`,
-      'Path=/api/zalo-multi',
-      'HttpOnly',
-      'SameSite=Lax',
-      `Max-Age=${ZALO_SESSION_TTL_SEC}`,
-    ];
-    if (this.configService.isProduction) phan.push('Secure');
+    // Một cookie cho MỖI đường proxy thay vì nới `Path=/api`: nới ra là cookie
+    // này đi kèm mọi lời gọi `api/v1` của app, rộng hơn mức cần.
+    return ZALO_COOKIE_PATHS.map((duong) => {
+      const phan = [`${ZALO_SESSION_COOKIE}=${token}`, `Path=${duong}`, 'HttpOnly', 'SameSite=Lax', `Max-Age=${ZALO_SESSION_TTL_SEC}`];
+      if (this.configService.isProduction) phan.push('Secure');
 
-    return phan.join('; ');
+      return phan.join('; ');
+    });
   }
 
-  /** Cookie xoá phiên (đăng xuất khỏi màn chat). */
-  cookieXoa(): string {
-    return `${ZALO_SESSION_COOKIE}=; Path=/api/zalo-multi; HttpOnly; SameSite=Lax; Max-Age=0`;
+  /** Cookie xoá phiên (đăng xuất khỏi màn chat) — xoá ở CẢ hai đường proxy. */
+  cookieXoa(): string[] {
+    return ZALO_COOKIE_PATHS.map((duong) => `${ZALO_SESSION_COOKIE}=; Path=${duong}; HttpOnly; SameSite=Lax; Max-Age=0`);
   }
 
   /** Đọc phiên từ header `cookie` thô. Trả `null` nếu thiếu/hỏng/hết hạn. */

@@ -72,7 +72,8 @@
     "impersonate": "Mạo danh",
     "zaloGroups": "Seller Support",
     "zaloChat": "Chat Zalo",
-    "ceoDashboard": "CEO Dashboard"
+    "ceoDashboard": "CEO Dashboard",
+    "telegram": "Telegram"
   },
   "header": {
     "toggleSidebar": "Đóng/mở sidebar",

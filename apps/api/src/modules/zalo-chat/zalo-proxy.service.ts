@@ -7,7 +7,7 @@ import { createZaloProxyHandler, createZaloSocketProxyHandler } from '@zero-126/
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { ApiConfigService } from '../../shared/services/api-config.service';
-import { ZALO_PROXY_PREFIX } from './zalo-chat.constants';
+import { TELEGRAM_PROXY_PREFIX, ZALO_PROXY_PREFIX } from './zalo-chat.constants';
 import { ZaloChatService } from './zalo-chat.service';
 
 type Handler = (req: Request, ctx?: { params?: Promise<{ path?: string[] }> }) => Promise<Response>;
@@ -33,6 +33,8 @@ export class ZaloProxyService implements OnModuleInit {
   private readonly logger = new Logger(ZaloProxyService.name);
   private rest!: Record<string, Handler>;
   private socket!: Record<string, Handler>;
+  /** Khu Telegram: CÙNG factory, chỉ khác tiền tố phía engine (gói 1.44.1). */
+  private telegram!: Record<string, Handler>;
 
   constructor(
     private readonly adapterHost: HttpAdapterHost,
@@ -53,6 +55,7 @@ export class ZaloProxyService implements OnModuleInit {
     };
     this.rest = createZaloProxyHandler(opts) as unknown as Record<string, Handler>;
     this.socket = createZaloSocketProxyHandler(opts) as unknown as Record<string, Handler>;
+    this.telegram = createZaloProxyHandler({ ...opts, enginePrefix: TELEGRAM_PROXY_PREFIX }) as unknown as Record<string, Handler>;
 
     if (!url || !secret) {
       this.logger.warn('[zalo-chat] chưa cấu hình ZALO_ENGINE_URL/ZALO_ENGINE_SECRET — màn chat sẽ báo lỗi cấu hình.');
@@ -70,21 +73,26 @@ export class ZaloProxyService implements OnModuleInit {
 
     const fastify = adapter.getInstance<FastifyInstance>();
     fastify.addHook('onRequest', async (req: FastifyRequest, reply: FastifyReply) => {
-      if (!req.url.startsWith(`${ZALO_PROXY_PREFIX}/`) && req.url !== ZALO_PROXY_PREFIX) return;
-      await this.chuyenTiep(req, reply);
+      const tien = [ZALO_PROXY_PREFIX, TELEGRAM_PROXY_PREFIX].find((p) => req.url === p || req.url.startsWith(`${p}/`));
+      if (!tien) return;
+      await this.chuyenTiep(req, reply, tien);
     });
-    this.logger.log(`[zalo-chat] proxy sẵn sàng tại ${ZALO_PROXY_PREFIX}/* → ${url || '(chưa cấu hình)'}`);
+    this.logger.log(
+      `[zalo-chat] proxy sẵn sàng tại ${ZALO_PROXY_PREFIX}/* và ${TELEGRAM_PROXY_PREFIX}/* → ${url || '(chưa cấu hình)'}`,
+    );
   }
 
-  private async chuyenTiep(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  private async chuyenTiep(req: FastifyRequest, reply: FastifyReply, tienTo: string): Promise<void> {
     const duongDan = req.url.split('?')[0];
-    const doanSau = duongDan.slice(ZALO_PROXY_PREFIX.length).replace(/^\//, '');
+    const doanSau = duongDan.slice(tienTo.length).replace(/^\//, '');
     // Giải mã từng đoạn: handler của nhà cung cấp mã hoá lại khi dựng URL đích,
     // giống hệt cách Next đưa `params.path` vào (đã giải mã).
     const doan = doanSau ? doanSau.split('/').map((s) => decodeURIComponent(s)) : [];
-    const laSocket = doan[0] === 'socket';
+    const laTelegram = tienTo === TELEGRAM_PROXY_PREFIX;
+    // Telegram chưa có đường socket riêng — thời gian thực vẫn đi qua socket Zalo.
+    const laSocket = !laTelegram && doan[0] === 'socket';
 
-    const co = laSocket ? this.socket : this.rest;
+    const co = laTelegram ? this.telegram : laSocket ? this.socket : this.rest;
     const handler = co[req.method] as Handler | undefined;
     if (!handler) {
       await reply.status(405).send({ error: 'method_not_allowed' });

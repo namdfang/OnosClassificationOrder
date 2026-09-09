@@ -29,6 +29,7 @@ import {
   Rows3,
   ScanLine,
   Scissors,
+  Send,
   Settings,
   ShieldCheck,
   ShieldHalf,
@@ -600,6 +601,15 @@ function buildNavGroups(t: TFunction<'layout'>, factoryScopeId?: string): NavGro
           label: t('sidebar.zaloChat'),
           to: PATHS.ZALO_CHAT,
           icon: <MessagesSquare size={17} />,
+        },
+        {
+          // Cùng engine, cùng phiên với màn Zalo, nên cũng cùng cách phân quyền:
+          // rule/grant nằm ở dialog "Phân quyền" của engine, không gắn mã quyền
+          // của hệ mình. Có từ engine 20260909 (`TELEGRAM_ENABLED=1`).
+          key: PATHS.TELEGRAM,
+          label: t('sidebar.telegram'),
+          to: PATHS.TELEGRAM,
+          icon: <Send size={17} />,
         },
         {
           key: PATHS.SETTINGS,
