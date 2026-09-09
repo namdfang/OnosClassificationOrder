@@ -33,6 +33,7 @@ import { CustomerModule } from './modules/customer/customer.module';
 import { CustomerAssignmentModule } from './modules/customer-assignment/customer-assignment.module';
 import { CustomerNotificationModule } from './modules/customer-notification/customer-notification.module';
 import { CustomerPortalModule } from './modules/customer-portal/customer-portal.module';
+import { CustomerWalletModule } from './modules/customer-wallet/customer-wallet.module';
 import { CustomerWebhookModule } from './modules/customer-webhook/customer-webhook.module';
 import { DepartmentModule } from './modules/departments/department.module';
 import { DesignStorageModule } from './modules/design-storage/design-storage.module';
@@ -52,6 +53,7 @@ import { BullMQModule } from './modules/queue/bullmq.module';
 import { RedisCacheModule } from './modules/redis-cache/redis-cache.module';
 import { RedisCacheService } from './modules/redis-cache/redis-cache.service';
 import { ScheduledReportsModule } from './modules/scheduled-reports/scheduled-reports.module';
+import { SellerShippingModule } from './modules/seller-shipping/seller-shipping.module';
 import { ShippingVnpModule } from './modules/shipping-vnp/shipping-vnp.module';
 import { TelegramNotificationModule } from './modules/telegram-notification/telegram-notification.module';
 import { UploadModule } from './modules/upload/upload.module';
@@ -94,9 +96,12 @@ import { SharedModule } from './shared/shared.module';
     CustomerPortalModule,
     // ORD-4 — webhook báo đổi trạng thái đơn cho khách API.
     CustomerWebhookModule,
+    // Ví seller (USD) — sổ cái + cache số dư (SellerWallet-LabelPurchase plan).
+    CustomerWalletModule,
     DesignStorageModule,
     FulfillmentModule,
     ShippingVnpModule,
+    SellerShippingModule,
     TelegramNotificationModule,
     ScheduledReportsModule,
     NotificationModule,

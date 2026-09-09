@@ -127,6 +127,22 @@ export class ShipmentEntity extends DatabaseEntityAbstract {
 
   @Prop()
   createdByUserName?: string;
+
+  /**
+   * Label do SELLER tự mua qua portal (SellerWallet-LabelPurchase plan) —
+   * 3 field dưới chỉ record đó mới có. `sellerPrice` = giá BẢNG SELLER đã trừ
+   * ví (USD, snapshot lúc mua — KHÁC `shippingCost` là giá VNP thật), margin
+   * label = sellerPrice − shippingCost.
+   */
+  @Prop()
+  sellerPrice?: number;
+
+  @Prop({ ref: 'CustomerEntity', index: true })
+  sellerCustomerId?: string;
+
+  /** Record sổ cái ví đã trừ tiền cho lượt mua này — đối soát 2 sổ. */
+  @Prop()
+  sellerWalletTxnId?: string;
 }
 
 export const ShipmentSchema = SchemaFactory.createForClass(ShipmentEntity);

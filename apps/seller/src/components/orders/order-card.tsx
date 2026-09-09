@@ -3,10 +3,11 @@
 import dayjs from 'dayjs';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
-import { Image as ImageIcon, PauseCircle, Wrench } from 'lucide-react';
+import { FileText, Image as ImageIcon, PauseCircle, Truck, Wrench } from 'lucide-react';
 import { CustomerOrderStatus } from 'shared/enums';
 import type { AdminCustomerStagingOrder } from 'shared';
 import { InternalStatus } from '@/components/hub/internal-status';
+import { canBuyLabelRow } from '@/components/orders/order-row';
 import { ViewAsButton } from '@/components/hub/view-as-button';
 import { ProductLineBadge, StatusBadge } from '@/components/shared/badge';
 import { SafeImage } from '@/components/shared/safe-image';
@@ -23,10 +24,12 @@ interface OrderCardProps {
   onToggle: () => void;
   onPushOne: () => void;
   onCancel: () => void;
+  /** Có callback + đơn đủ điều kiện → nút "Mua vận đơn" (chỉ portal seller). */
+  onBuyLabel?: () => void;
 }
 
 /** Bản THẺ của `OrderRow` cho màn hình < md — cùng dữ liệu, không cuộn ngang. */
-export function OrderCard({ order, adminMode = false, showViewAs = true, selected, onToggle, onPushOne, onCancel }: OrderCardProps) {
+export function OrderCard({ order, adminMode = false, showViewAs = true, selected, onToggle, onPushOne, onCancel, onBuyLabel }: OrderCardProps) {
   const { t } = useTranslation(['customerPortal', 'seller', 'hub', 'track']);
   const isPending = order.status === CustomerOrderStatus.Pending;
   const code = orderDisplayCode(order);
@@ -34,6 +37,7 @@ export function OrderCard({ order, adminMode = false, showViewAs = true, selecte
   const extra = order.items.length - 1;
   const thumb = first?.mockupUrl ? (driveThumbnailUrl(first.mockupUrl, 100) ?? first.mockupUrl) : null;
   const detailHref = !adminMode && first?.productionId ? `/portal/orders/${encodeURIComponent(first.productionId)}` : null;
+  const tracked = order.items.find((i) => i.tracking?.number)?.tracking;
   const stage = first?.currentStageKey ? t(`track:progress.stages.${first.currentStageKey}`, { defaultValue: first.currentStageLabel ?? '' }) : first?.currentStageLabel;
   return (
     <div className={`bg-card border border-border1 rounded-xl p-3 space-y-2 ${order.status === CustomerOrderStatus.Cancelled ? 'opacity-60' : ''}`}>
@@ -74,9 +78,30 @@ export function OrderCard({ order, adminMode = false, showViewAs = true, selecte
         {order.totalAmount != null && <span className="text-xs font-bold tabular-nums text-text-primary shrink-0">{fmtUSD(order.totalAmount)}</span>}
       </div>
       {adminMode && first?.internal && <div className="pt-1 border-t border-border2"><InternalStatus s={first.internal} compact /></div>}
-      {((adminMode && showViewAs) || (!adminMode && isPending)) && (
+      {tracked?.number && (
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-border2 text-[11px]">
+          {tracked.url ? (
+            <a href={tracked.url} target="_blank" rel="noreferrer" className="font-mono text-accent hover:underline truncate">
+              {tracked.number}
+            </a>
+          ) : (
+            <span className="font-mono text-text-primary truncate">{tracked.number}</span>
+          )}
+          {tracked.labelUrl && (
+            <a href={tracked.labelUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 shrink-0 text-[10px] font-semibold text-accent hover:underline">
+              <FileText size={10} /> {t('seller:buyLabel.labelLink')} ↗
+            </a>
+          )}
+        </div>
+      )}
+      {((adminMode && showViewAs) || (!adminMode && isPending) || (!adminMode && !!onBuyLabel && canBuyLabelRow(order, tracked))) && (
         <div className="flex justify-end gap-1.5 pt-1 border-t border-border2">
           {adminMode && order.customerId && <ViewAsButton customerId={order.customerId} target={first?.productionId ? `/portal/orders/${encodeURIComponent(first.productionId)}` : '/portal/orders'} />}
+          {!adminMode && onBuyLabel && canBuyLabelRow(order, tracked) && (
+            <button type="button" onClick={onBuyLabel} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-border1 text-[11px] font-semibold hover:border-accent hover:text-accent">
+              <Truck size={11} /> {t('seller:buyLabel.button')}
+            </button>
+          )}
           {!adminMode && isPending && (
             <>
               <button type="button" onClick={onCancel} className="px-2.5 py-1.5 rounded-md text-[11px] font-semibold text-error hover:bg-error-bg">{t('seller:detail.cancel')}</button>

@@ -9,6 +9,8 @@
   "stats": {
     "total": "Tổng vận đơn",
     "cost": "Tổng chi phí",
+    "sellerRevenue": "Thu seller (tiền vào)",
+    "sellerMargin": "Lãi label seller",
     "active": "Đang hoạt động",
     "delivered": "Đã giao",
     "cancelled": "Đã hủy",
@@ -44,7 +46,8 @@
     "status": "Trạng thái",
     "by": "Người tạo",
     "label": "Label",
-    "empty": "Chưa có vận đơn nào"
+    "empty": "Chưa có vận đơn nào",
+    "sellerPrice": "Thu seller"
   },
   "timeline": {
     "title": "Timeline vận đơn — {{code}}",

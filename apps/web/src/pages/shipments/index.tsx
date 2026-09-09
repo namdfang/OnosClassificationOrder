@@ -176,6 +176,14 @@ function ShipmentsContent() {
         ? [
             { key: 'total', value: String(stats.totals.count) },
             { key: 'cost', value: stats.totals.cost.toFixed(2) },
+            {
+              key: 'sellerRevenue',
+              value: `${(stats.totals.sellerRevenue ?? 0).toFixed(2)} (${stats.totals.sellerLabelCount ?? 0})`,
+            },
+            {
+              key: 'sellerMargin',
+              value: ((stats.totals.sellerRevenue ?? 0) - (stats.totals.sellerCost ?? 0)).toFixed(2),
+            },
             { key: 'active', value: String(stats.totals.active) },
             { key: 'delivered', value: String(stats.totals.delivered) },
             { key: 'cancelled', value: String(stats.totals.cancelled) },
@@ -218,7 +226,7 @@ function ShipmentsContent() {
           </label>
           <span className="text-[11px] text-muted-foreground">{t('stats.costNote')}</span>
         </div>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
           {statCards.map((c) => (
             <div key={c.key} className="rounded-lg border border-border bg-card px-3 py-2">
               <div className="text-[11px] text-muted-foreground">{t(`stats.${c.key}`)}</div>
@@ -268,6 +276,7 @@ function ShipmentsContent() {
                 <TableHead>{t('table.tracking')}</TableHead>
                 <TableHead>{t('table.service')}</TableHead>
                 <TableHead className="text-right">{t('table.cost')}</TableHead>
+                <TableHead className="text-right">{t('table.sellerPrice')}</TableHead>
                 <TableHead>{t('table.status')}</TableHead>
                 <TableHead>{t('table.by')}</TableHead>
                 <TableHead>{t('table.label')}</TableHead>
@@ -276,14 +285,14 @@ function ShipmentsContent() {
             <TableBody>
               {loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center">
+                  <TableCell colSpan={9} className="py-8 text-center">
                     <Spinner />
                   </TableCell>
                 </TableRow>
               )}
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
                     {t('table.empty')}
                   </TableCell>
                 </TableRow>
@@ -305,6 +314,9 @@ function ShipmentsContent() {
                   <TableCell className="font-mono text-xs">{rec.trackingCode ?? '—'}</TableCell>
                   <TableCell className="text-xs">{rec.service ?? '—'}</TableCell>
                   <TableCell className="text-right font-mono text-xs">{rec.shippingCost ?? '—'}</TableCell>
+                  <TableCell className="text-right font-mono text-xs">
+                    {rec.sellerPrice != null ? `$${rec.sellerPrice.toFixed(2)}` : '—'}
+                  </TableCell>
                   <TableCell>
                     <StatusBadge status={rec.status} />
                   </TableCell>
