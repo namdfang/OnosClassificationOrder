@@ -367,6 +367,19 @@ của `CACHE_MANAGER` bị Redis đóng vì `timeout 300` trong `D:\dev\redis\re
 
 `paths` áp cho MỌI import trong chương trình (kể cả d.ts trong node_modules) nên react-router cũng bị ghim về 18. Vite không đọc `tsconfig.paths` (alias khai ở `vite.config`) nên runtime không đổi. Không chỉnh `hoist-pattern` toàn workspace — nhiều package khác đang sống nhờ hoist ẩn đó.
 
+## 10. ⚠️ Logger wrapper thiếu method → TypeError nổ NGAY TRONG catch block, nuốt cả luồng xử lý lỗi
+
+**Triệu chứng (09/09/2026, test e2e mua label seller):** `POST customer/shipping/orders/:id/label` trả `500 Internal server error` raw (đáng lẽ 400 `service_unavailable`) và **ví seller bị trừ tiền mà không hoàn** — nhánh auto-refund không bao giờ chạy. Log Nest: `TypeError: this.logger.error is not a function`.
+
+**Root cause:** token DI `'winston'` (`apps/api/src/modules/winston/`) cung cấp `LoggerWrapper` — trước đây CHỈ có `.info()`. Các service inject nó nhưng khai type là winston `Logger` (`@Inject('winston') private readonly logger: Logger`) nên `this.logger.error(...)` type-check qua ngon lành, runtime mới nổ. Chết chỗ hiểm nhất: **lệnh log lỗi nằm đầu catch block** → TypeError thay thế lỗi gốc, mọi bước sau trong catch (hoàn tiền, dịch mã lỗi an toàn) bị nuốt. Lúc phát hiện có 19 call site `.error/.warn/.debug` trên 6 file dính bug tiềm ẩn này, gồm cả `shipping-vnp.service.ts` (9 chỗ — cron đối soát/hủy label).
+
+**Fix (đã áp):** thêm `error`/`warn`/`debug` delegate vào `LoggerWrapper` (`logger.wrapper.ts`) — 1 chỗ sửa chữa cả 19 call site.
+
+**Rule:**
+- Wrapper che một interface có sẵn thì phải phủ ĐỦ các method mà type khai ra — hoặc khai type là chính wrapper, đừng mượn type của thư viện gốc.
+- Code trong catch block phải "không được ném": lệnh đầu tiên của catch mà ném thì toàn bộ xử lý lỗi phía sau (refund, dịch mã lỗi) chết theo. Nghi ngờ gì thì log SAU khi làm việc quan trọng (hoàn tiền trước, log sau).
+- Test nhánh lỗi bằng cách ép dependency fail thật (thiếu config, service down) — unit test mock logger đủ method nên không bao giờ bắt được lỗi này.
+
 ## Khi nào update file này
 
 - Phát hiện bug pattern cross-cutting (ảnh hưởng > 1 module).

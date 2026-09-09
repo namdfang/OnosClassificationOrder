@@ -45,6 +45,9 @@
     ],
     // words - list of words to be always considered correct
     "words": [
+      "txns",
+      "Txns",
+      "recalc",
       "unheld",
         "DSHIRT",
         "PRINTERVAL",

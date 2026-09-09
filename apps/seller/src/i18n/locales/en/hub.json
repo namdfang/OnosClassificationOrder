@@ -13,7 +13,8 @@
     "factoryApp": "Factory operations",
     "signOut": "Sign out",
     "ordersAll": "All services",
-    "operations": "Operations"
+    "operations": "Operations",
+    "wallets": "Wallets"
   },
   "login": {
     "title": "Seller Hub",
@@ -224,5 +225,54 @@
     "pickServiceHint": "Which service is this order for?",
     "pickSellerHint": "Which seller is this order for? Prices follow that seller's tier.",
     "newOrder": "Create order for seller"
+  },
+  "wallets": {
+    "title": "Seller wallets",
+    "subtitle": "Top up/adjust wallets, credit limits and the label price table sold to sellers",
+    "nav": "Wallets",
+    "activeOnly": "Only funded wallets",
+    "columns": {
+      "seller": "Seller",
+      "balance": "Balance",
+      "creditLimit": "Credit limit",
+      "lastTxn": "Last txn",
+      "actions": ""
+    },
+    "empty": "No sellers match.",
+    "topup": "Top up",
+    "adjust": "Adjust",
+    "creditLimitBtn": "Credit",
+    "ledger": "Ledger",
+    "topupTitle": "Top up wallet of {{name}}",
+    "adjustTitle": "Adjust wallet of {{name}}",
+    "creditLimitTitle": "Credit limit of {{name}}",
+    "ledgerTitle": "Wallet ledger — {{name}}",
+    "amountLabel": "Amount (USD)",
+    "adjustAmountHint": "Positive = credit, negative = debit (e.g. label-cancel refund: positive; clawback: negative).",
+    "noteLabel": "Note (required)",
+    "notePlaceholder": "e.g. Bank transfer 09/09 — 200 USD",
+    "creditLimitLabel": "Limit (USD, ≥ 0)",
+    "creditLimitHint": "Balance may go down to −limit. 0 = no debt allowed.",
+    "saved": "Saved.",
+    "topupDone": "Topped up {{amount}} — new balance {{balance}}.",
+    "adjustDone": "Adjusted {{amount}} — new balance {{balance}}.",
+    "priceTable": "Seller label price table",
+    "priceTableHint": "2-column CSV WEIGHT,PRICE (gram, USD) — ascending tiers",
+    "priceTableEmpty": "No price table yet — sellers CANNOT buy labels. Upload a CSV to enable.",
+    "priceTableCount": "{{count}} tiers · up to {{max}}g",
+    "priceTableUpdated": "Updated: {{when}}",
+    "upload": "Upload CSV",
+    "uploadDone": "Price table replaced: {{count}} tiers, up to {{max}}g.",
+    "uploadError": "Bad file: {{message}}",
+    "enabled": "Sellers can buy labels",
+    "toggleOn": "ON",
+    "toggleOff": "OFF",
+    "sellerBought": "Seller-bought",
+    "summary": {
+      "vnpWallet": "VNP wallet (company)",
+      "revenue": "Seller revenue (in)",
+      "cost": "VNP spend (out)",
+      "margin": "Seller label margin"
+    }
   }
 }

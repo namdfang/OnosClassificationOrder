@@ -12,6 +12,7 @@ import { OrdersPagination } from '@/components/orders/orders-pagination';
 import { OrdersStatsBar } from '@/components/orders/orders-stats-bar';
 import { OrdersStatusFilterPills } from '@/components/orders/orders-status-filter-pills';
 import { ProductLineTabs, type ProductLineTabKey } from '@/components/orders/product-line-tabs';
+import { BuyLabelDialog } from '@/components/orders/buy-label-dialog';
 import { PushDialog } from '@/components/orders/push-dialog';
 import { Button } from '@/components/shared/button';
 import { ConfirmModal } from '@/components/shared/confirm-modal';
@@ -95,6 +96,9 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
   const [pushIds, setPushIds] = useState<string[]>([]);
   const [cancelTarget, setCancelTarget] = useState<CustomerStagingOrder | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  // Mua vận đơn (chỉ portal seller) — render dialog CÓ ĐIỀU KIỆN để mỗi lần mở
+  // là 1 mount mới (requestId idempotency sinh 1 lần / lượt mở).
+  const [buyTarget, setBuyTarget] = useState<CustomerStagingOrder | null>(null);
 
   // Đổi filter/trang → bỏ chọn (khuôn "adjust state while rendering", không dùng effect).
   const filterKey = `${status}|${heldOnly}|${search}|${line}|${page}`;
@@ -211,7 +215,7 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
         {/* < md: thẻ dọc (không cuộn ngang); ≥ md: bảng */}
         <div className={`md:hidden space-y-2 flex-1 min-h-0 overflow-y-auto transition-opacity ${loading ? 'opacity-60' : ''}`}>
           {orders.map((o) => (
-            <OrderCard key={o._id} order={o} adminMode={adminMode} selected={selected.has(o._id)} onToggle={() => toggle(o._id)} onPushOne={() => setPushIds([o._id])} onCancel={() => setCancelTarget(o)} />
+            <OrderCard key={o._id} order={o} adminMode={adminMode} selected={selected.has(o._id)} onToggle={() => toggle(o._id)} onPushOne={() => setPushIds([o._id])} onCancel={() => setCancelTarget(o)} onBuyLabel={adminMode ? undefined : () => setBuyTarget(o)} />
           ))}
         </div>
         <div className={`hidden md:block bg-card border border-border1 rounded-xl flex-1 min-h-0 overflow-auto scrollbar-thin transition-opacity ${loading ? 'opacity-60' : ''}`}>
@@ -250,6 +254,7 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
                   onToggle={() => toggle(o._id)}
                   onPushOne={() => setPushIds([o._id])}
                   onCancel={() => setCancelTarget(o)}
+                  onBuyLabel={adminMode ? undefined : () => setBuyTarget(o)}
                 />
               ))}
             </tbody>
@@ -272,6 +277,14 @@ export function OrdersListView({ lockedLine, adminMode = false }: OrdersListView
       </div>
 
       <PushDialog ids={pushIds} open={pushIds.length > 0} onClose={() => setPushIds([])} onPushed={() => { setSelected(new Set()); refreshAll(); }} />
+      {buyTarget && (
+        <BuyLabelDialog
+          stagingId={buyTarget._id}
+          code={orderDisplayCode(buyTarget)}
+          onClose={() => setBuyTarget(null)}
+          onBought={refreshAll}
+        />
+      )}
       <ConfirmModal
         open={!!cancelTarget}
         onClose={() => setCancelTarget(null)}

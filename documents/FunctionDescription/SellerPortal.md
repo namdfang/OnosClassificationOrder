@@ -299,6 +299,11 @@ Trước tối ưu, F5 `/hub/orders` chờ ~6 s: `admin/customer-orders` 6,3 s +
 
 Còn chậm (chưa làm): `status=completed` và tính lại counts/stats nền vẫn ≈ 5–6 s vì phải derive toàn bộ. Hướng cấu trúc nếu cần: ghi **snapshot trạng thái** (`statusSnapshot`/`stageSnapshot`) lên document staging khi push/transition + cron đồng bộ, rồi lọc/đếm bằng index — khi đó mọi đường về < 0,2 s.
 
+### 9.6 Ví seller + seller tự mua label (09/09/2026)
+
+- Portal thêm trang **`/portal/wallet`** (số dư USD + sổ cái before→after + bảng giá) và nút **"Mua vận đơn"** trên đơn cod/tiktok đã push ở `/portal/orders*` (`BuyLabelDialog`). Hub thêm **`/hub/wallets`**: nạp/điều chỉnh ví (note bắt buộc), hạn mức nợ, drill sổ cái, upload bảng giá CSV + công tắc tổng.
+- BE: `customer/wallet*` + `customer/shipping/*` (`@Auth([Customer])`) · `admin/customer-wallets*` + `admin/seller-shipping/*` (`@Auth([Admin])`). Chi tiết đầy đủ: [`SellerWallet.md`](SellerWallet.md).
+
 ## 8. Vận hành & hạ tầng (PR-D)
 
 | Môi trường | Chạy bằng | Env | Vào từ |

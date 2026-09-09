@@ -3,7 +3,7 @@
 import dayjs from 'dayjs';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
-import { Image as ImageIcon, PauseCircle, Wrench } from 'lucide-react';
+import { FileText, Image as ImageIcon, PauseCircle, Truck, Wrench } from 'lucide-react';
 import { CustomerOrderStatus } from 'shared/enums';
 import type { AdminCustomerStagingOrder } from 'shared';
 import { ViewAsButton } from '@/components/hub/view-as-button';
@@ -22,10 +22,28 @@ interface OrderRowProps {
   onToggle: () => void;
   onPushOne: () => void;
   onCancel: () => void;
+  /** Có callback + đơn đủ điều kiện → nút "Mua vận đơn" ở cột tracking (chỉ portal seller). */
+  onBuyLabel?: () => void;
+}
+
+/**
+ * Mirror CLIENT-SIDE của `checkSellerLabelEligibility` BE (chỉ phần thấy được
+ * từ row) — quyết định CÓ HIỆN nút hay không; server vẫn tự kiểm lại đủ bộ.
+ * Chỉ đơn cod/tiktok (ship chưa nằm trong giá), đã đẩy SX, chưa giữ/hủy, chưa có tracking.
+ */
+export function canBuyLabelRow(order: OrderRowProps['order'], tracked: unknown): boolean {
+  return (
+    !!order.pushedAt &&
+    order.status !== CustomerOrderStatus.Cancelled &&
+    !order.held &&
+    !tracked &&
+    order.items.length > 0 &&
+    order.items.every((i) => i.shipMethod === 'cod' || i.shipMethod === 'tiktok')
+  );
 }
 
 /** Mirror cột của `apps/web/src/pages/customer/orders/index.tsx` + cột dòng sản phẩm. */
-export function OrderRow({ order, adminMode = false, selected, onToggle, onPushOne, onCancel }: OrderRowProps) {
+export function OrderRow({ order, adminMode = false, selected, onToggle, onPushOne, onCancel, onBuyLabel }: OrderRowProps) {
   const { t } = useTranslation(['customerPortal', 'seller', 'hub', 'track']);
   const isPending = order.status === CustomerOrderStatus.Pending;
   const code = orderDisplayCode(order);
@@ -134,10 +152,34 @@ export function OrderRow({ order, adminMode = false, selected, onToggle, onPushO
       </td>
       <td className="px-3 py-2.5 align-top">
         {tracked?.number ? (
-          <div className="text-[11px]">
-            <p className="font-mono text-text-primary">{tracked.number}</p>
+          <div className="text-[11px] space-y-0.5">
+            {tracked.url ? (
+              <a href={tracked.url} target="_blank" rel="noreferrer" className="block font-mono text-accent hover:underline">
+                {tracked.number}
+              </a>
+            ) : (
+              <p className="font-mono text-text-primary">{tracked.number}</p>
+            )}
             {tracked.carrier && <p className="text-text-muted">{tracked.carrier}</p>}
+            {tracked.labelUrl && (
+              <a
+                href={tracked.labelUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-accent hover:underline"
+              >
+                <FileText size={10} /> {t('seller:buyLabel.labelLink')} ↗
+              </a>
+            )}
           </div>
+        ) : !adminMode && onBuyLabel && canBuyLabelRow(order, tracked) ? (
+          <button
+            type="button"
+            onClick={onBuyLabel}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border1 text-[10px] font-semibold hover:border-accent hover:text-accent"
+          >
+            <Truck size={11} /> {t('seller:buyLabel.button')}
+          </button>
         ) : (
           <span className="text-xs text-text-muted">—</span>
         )}

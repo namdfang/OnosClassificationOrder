@@ -57,6 +57,10 @@ Chỗ đúng để chứa chúng là **CHÍNH cặp bảng ở §2a**, không ph
 - **Hiển thị**: bảng đơn hàng hiện chip `🏷️ Label KH` + số tracking ở cột thông tin (`workshopTableConfig.tsx`) — **KHÔNG gate theo role admin** như chip label VNP, vì người cần nó nhất là công nhân Đóng hàng.
 - Test giữ luật: `apps/api/src/modules/shipping-vnp/shipment-ingest.spec.ts`.
 
+### 2d. Label do SELLER tự mua qua portal (09/09/2026)
+
+Seller mua label cho đơn cod/tiktok của mình ở Seller Portal — dùng NGUYÊN `createShipment()` của module này (giữ chỗ/chống trùng/đối soát không đổi), chỉ khác: trả bằng **ví seller** theo bảng giá riêng và record `shipments` có thêm `sellerPrice` (giá thu seller, USD) + `sellerCustomerId` + `sellerWalletTxnId` — margin = `sellerPrice − shippingCost`, hiện ở cột "Thu seller" `/adm/shipments`. Toàn bộ luồng/ví/lỗi an toàn: xem [`SellerWallet.md`](SellerWallet.md).
+
 ### 2b. Địa chỉ gửi (ShippingFrom) theo xưởng — cấu hình UI, sống theo môi trường
 
 - **Cài đặt → Vận chuyển VNP** (`/adm/settings/vnp-shipping`, perm `role.manage`, component `VnpShippingConfig.tsx`): (1) form **tạo địa chỉ gửi** — BE gọi thẳng `POST /shipment/createAddress` (type `ShippingFrom`) bên VNP rồi lưu id + snapshot; (2) bảng **gán xưởng → địa chỉ** (mỗi xưởng 1 select; nhiều xưởng chung 1 địa chỉ OK — 2D Thái Nguyên + Gỗ Thái Nguyên → cùng địa chỉ Thái Nguyên) + **địa chỉ mặc định**.

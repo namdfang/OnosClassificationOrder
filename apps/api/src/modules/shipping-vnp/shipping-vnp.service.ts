@@ -991,6 +991,8 @@ export class ShippingVnpService implements OnModuleInit {
       trackingEvents: doc.trackingEvents ?? [],
       createdByUserId: doc.createdByUserId,
       createdByUserName: doc.createdByUserName,
+      sellerPrice: doc.sellerPrice,
+      sellerCustomerId: doc.sellerCustomerId,
       createdAt: doc.createdAt,
       package: pack
         ? {
@@ -1369,8 +1371,20 @@ export class ShippingVnpService implements OnModuleInit {
     // Chỉ tính cost/bucket cho label THẬT đã mua: loại `purchasing` (chưa chắc
     // mua xong), `failed` (không mất tiền) bên cạnh `cancelled` như trước.
     const counted = { $match: { status: { $in: [...VNP_SHIPMENT_COUNTED_STATUSES] } } };
+    // Label seller tự mua = có `sellerPrice` (chỉ stamp sau khi mua thành công);
+    // "tiền vào" = seller trả mình, "tiền ra" của riêng nhóm đó = chi VNP tương ứng.
+    const isSellerLabel = { $and: [{ $ne: ['$status', 'cancelled'] }, { $gt: ['$sellerPrice', 0] }] };
     const [facet] = await this.shipmentModel.aggregate<{
-      totals: { count: number; cost: number; active: number; delivered: number; cancelled: number }[];
+      totals: {
+        count: number;
+        cost: number;
+        active: number;
+        delivered: number;
+        cancelled: number;
+        sellerRevenue: number;
+        sellerCost: number;
+        sellerLabelCount: number;
+      }[];
       byMonth: { key: string; count: number; cost: number }[];
       byFactory: { key: string; count: number; cost: number; factoryName?: string }[];
       byService: { key: string; count: number; cost: number }[];
@@ -1387,6 +1401,9 @@ export class ShippingVnpService implements OnModuleInit {
                 active: { $sum: { $cond: [{ $in: ['$status', ['created', 'in_transit']] }, 1, 0] } },
                 delivered: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
                 cancelled: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } },
+                sellerRevenue: { $sum: { $cond: [isSellerLabel, { $ifNull: ['$sellerPrice', 0] }, 0] } },
+                sellerCost: { $sum: { $cond: [isSellerLabel, costExpr, 0] } },
+                sellerLabelCount: { $sum: { $cond: [isSellerLabel, 1, 0] } },
               },
             },
             { $project: { _id: 0 } },
@@ -1431,7 +1448,16 @@ export class ShippingVnpService implements OnModuleInit {
       },
     ]);
     return {
-      totals: facet?.totals?.[0] ?? { count: 0, cost: 0, active: 0, delivered: 0, cancelled: 0 },
+      totals: facet?.totals?.[0] ?? {
+        count: 0,
+        cost: 0,
+        active: 0,
+        delivered: 0,
+        cancelled: 0,
+        sellerRevenue: 0,
+        sellerCost: 0,
+        sellerLabelCount: 0,
+      },
       byMonth: facet?.byMonth ?? [],
       byFactory: facet?.byFactory ?? [],
       byService: facet?.byService ?? [],
