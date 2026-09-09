@@ -75,6 +75,18 @@ export class CustomerEntity extends DatabaseEntityAbstract {
     revokedAt?: Date | null;
   }>;
 
+  /**
+   * Ví seller (USD) — CACHE của sổ cái `customer_wallet_transactions`; TUYỆT ĐỐI
+   * không $set trực tiếp ngoài `CustomerWalletService.applyTransaction()` (ghi
+   * kèm record sổ trong cùng transaction Mongo, có kiểm hạn mức).
+   */
+  @Prop({ type: Number, default: 0 })
+  walletBalance: number;
+
+  /** Hạn mức nợ ví admin cấp — số dư được xuống tới `-creditLimit`. Mặc định 0. */
+  @Prop({ type: Number, default: 0 })
+  creditLimit: number;
+
   // Mốc "đã đọc thông báo tới lúc này" — bump khi khách bấm "Đánh dấu đã đọc"
   // ở chuông thông báo Customer Portal. KHÔNG public qua `toSafeCustomer()`/
   // `CustomerZod` — chỉ đọc/ghi nội bộ trong `customer-notification` module.

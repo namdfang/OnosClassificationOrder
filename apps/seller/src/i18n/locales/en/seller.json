@@ -14,7 +14,8 @@
     "signOut": "Sign out",
     "customer": "Customer",
     "api": "API & Webhooks",
-    "catalog": "Catalog"
+    "catalog": "Catalog",
+    "wallet": "My wallet"
   },
   "login": {
     "welcome": "Sign in to Seller Portal",
@@ -164,5 +165,59 @@
     "verifying": "Verifying…",
     "verifyOk": "Address looks valid",
     "verifyFail": "Carrier could not verify the address"
+  },
+  "wallet": {
+    "title": "My wallet",
+    "subtitle": "USD balance used to buy shipping labels — top up by bank transfer, then ask support to credit your wallet",
+    "balance": "Balance",
+    "creditLimit": "Credit limit",
+    "topupHint": "Top up: transfer to Onos and notify support — credited funds appear in the table below. Automatic top-up is coming later.",
+    "history": "Transaction history",
+    "empty": "No transactions yet.",
+    "priceTable": "Shipping price table",
+    "priceTableEmpty": "No price table yet.",
+    "priceRow": "≤ {{gram}}g",
+    "kinds": {
+      "topup": "Top-up",
+      "label": "Label purchase",
+      "label_refund": "Label refund",
+      "order": "Order payment",
+      "adjust": "Adjustment"
+    },
+    "columns": {
+      "when": "When",
+      "kind": "Type",
+      "amount": "Amount",
+      "before": "Before",
+      "after": "After",
+      "note": "Note"
+    },
+    "kindAll": "All types"
+  },
+  "buyLabel": {
+    "button": "Buy label",
+    "title": "Buy label for order {{code}}",
+    "weightLabel": "Package weight (gram)",
+    "weightHint": "Enter the real packed weight — the system charges the LARGER of your weight and the dimensional weight.",
+    "actual": "Entered weight",
+    "dim": "Dimensional weight",
+    "chargeable": "Chargeable weight",
+    "tier": "Price tier",
+    "price": "Label price",
+    "wallet": "Wallet balance",
+    "afterBuy": "Balance after purchase",
+    "confirm": "Confirm purchase",
+    "recalc": "Get price",
+    "success": "Label purchased: {{tracking}}",
+    "labelLink": "Label",
+    "viewWallet": "View wallet",
+    "errors": {
+      "missing_weight": "Missing weight — enter the package weight (gram) and retry.",
+      "over_max_weight": "Package over 10,000g — contact support to buy manually.",
+      "not_eligible": "This order cannot buy a label (only pushed COD/TikTok orders, not held/cancelled).",
+      "already_has_label": "This order already has a label — one label per order.",
+      "insufficient_funds": "Wallet balance is not enough — top up and retry.",
+      "service_unavailable": "Label service temporarily unavailable — retry later or contact support."
+    }
   }
 }

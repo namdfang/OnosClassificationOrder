@@ -14,7 +14,8 @@
     "signOut": "Đăng xuất",
     "customer": "Khách hàng",
     "api": "API & Webhook",
-    "catalog": "Danh mục"
+    "catalog": "Danh mục",
+    "wallet": "Ví của tôi"
   },
   "login": {
     "welcome": "Đăng nhập cổng seller",
@@ -164,5 +165,59 @@
     "verifying": "Đang xác minh…",
     "verifyOk": "Địa chỉ hợp lệ",
     "verifyFail": "Hãng không xác nhận được địa chỉ"
+  },
+  "wallet": {
+    "title": "Ví của tôi",
+    "subtitle": "Số dư USD dùng để mua vận đơn — nạp tiền bằng chuyển khoản rồi báo đội hỗ trợ cộng ví",
+    "balance": "Số dư",
+    "creditLimit": "Hạn mức nợ",
+    "topupHint": "Nạp tiền: chuyển khoản cho Onos rồi báo đội hỗ trợ — tiền vào ví sẽ hiện ở bảng dưới. Cổng nạp tự động sẽ có sau.",
+    "history": "Lịch sử giao dịch",
+    "empty": "Chưa có giao dịch nào.",
+    "priceTable": "Bảng giá vận đơn",
+    "priceTableEmpty": "Chưa có bảng giá.",
+    "priceRow": "≤ {{gram}}g",
+    "kinds": {
+      "topup": "Nạp ví",
+      "label": "Mua vận đơn",
+      "label_refund": "Hoàn tiền vận đơn",
+      "order": "Tiền đơn hàng",
+      "adjust": "Điều chỉnh"
+    },
+    "columns": {
+      "when": "Lúc",
+      "kind": "Loại",
+      "amount": "Số tiền",
+      "before": "Trước",
+      "after": "Sau",
+      "note": "Ghi chú"
+    },
+    "kindAll": "Mọi loại"
+  },
+  "buyLabel": {
+    "button": "Mua vận đơn",
+    "title": "Mua vận đơn cho đơn {{code}}",
+    "weightLabel": "Cân nặng kiện (gram)",
+    "weightHint": "Điền cân thật sau khi đóng gói — hệ thống lấy số LỚN HƠN giữa cân bạn điền và cân quy đổi kích thước.",
+    "actual": "Cân điền",
+    "dim": "Cân quy đổi",
+    "chargeable": "Cân tính cước",
+    "tier": "Mốc giá",
+    "price": "Giá vận đơn",
+    "wallet": "Ví hiện có",
+    "afterBuy": "Còn lại sau mua",
+    "confirm": "Xác nhận mua",
+    "recalc": "Tính giá",
+    "success": "Đã mua vận đơn: {{tracking}}",
+    "labelLink": "Label",
+    "viewWallet": "Xem ví",
+    "errors": {
+      "missing_weight": "Thiếu cân nặng — điền cân kiện (gram) rồi thử lại.",
+      "over_max_weight": "Kiện quá 10.000g — liên hệ đội hỗ trợ để mua thủ công.",
+      "not_eligible": "Đơn này không mua được vận đơn (chỉ đơn COD/TikTok đã đẩy sản xuất, chưa giữ/hủy).",
+      "already_has_label": "Đơn đã có vận đơn — 1 đơn chỉ mua 1 vận đơn.",
+      "insufficient_funds": "Số dư ví không đủ — nạp thêm rồi thử lại.",
+      "service_unavailable": "Dịch vụ vận đơn tạm gián đoạn — thử lại sau hoặc liên hệ hỗ trợ."
+    }
   }
 }

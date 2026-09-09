@@ -51,6 +51,7 @@ export function buildCustomerNav(t: TFunction): NavGroup[] {
     {
       group: t('nav.groupAccount', { ns: 'seller' }),
       items: [
+        { id: 'wallet', icon: '💰', label: t('nav.wallet', { ns: 'seller' }), href: '/portal/wallet' },
         { id: 'account', icon: '👤', label: t('nav.account', { ns: 'seller' }), href: '/portal/account' },
         { id: 'api', icon: '🔌', label: t('nav.api', { ns: 'seller' }), href: '/portal/api' },
       ],
@@ -94,6 +95,7 @@ export function buildHubNav(t: TFunction): NavGroup[] {
         },
         { id: 'hub_operations', icon: '🏭', label: t('nav.operations', { ns: 'hub' }), href: '/hub/operations' },
         { id: 'hub_sellers', icon: '👥', label: t('nav.sellers', { ns: 'hub' }), href: '/hub/sellers' },
+        { id: 'hub_wallets', icon: '💰', label: t('nav.wallets', { ns: 'hub' }), href: '/hub/wallets' },
         { id: 'hub_notifications', icon: '🔔', label: t('nav.notifications', { ns: 'hub' }), href: '/hub/notifications' },
       ],
     },

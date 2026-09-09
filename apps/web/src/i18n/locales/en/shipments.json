@@ -9,6 +9,8 @@
   "stats": {
     "total": "Total shipments",
     "cost": "Total cost",
+    "sellerRevenue": "Seller revenue (in)",
+    "sellerMargin": "Seller label margin",
     "active": "Active",
     "delivered": "Delivered",
     "cancelled": "Cancelled",
@@ -44,7 +46,8 @@
     "status": "Status",
     "by": "Created by",
     "label": "Label",
-    "empty": "No shipments yet"
+    "empty": "No shipments yet",
+    "sellerPrice": "Seller price"
   },
   "timeline": {
     "title": "Shipment timeline — {{code}}",

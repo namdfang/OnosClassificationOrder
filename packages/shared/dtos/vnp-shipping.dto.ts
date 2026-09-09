@@ -369,6 +369,9 @@ export const VnpShipmentRecordZod = z.object({
   trackingEvents: z.array(VnpTrackingEventZod).optional(),
   createdByUserId: z.string().optional(),
   createdByUserName: z.string().optional(),
+  /** Label do SELLER tự mua qua portal — giá bảng seller đã trừ ví (USD, snapshot). Margin = sellerPrice − shippingCost. */
+  sellerPrice: z.number().optional(),
+  sellerCustomerId: z.string().optional(),
   createdAt: z.union([z.date(), z.string()]).optional(),
   /** Kiện chứa (join khi list/history). */
   package: VnpShippingPackageZod.optional(),
@@ -412,6 +415,11 @@ export const VnpShipmentStatsZod = z.object({
     active: z.number(),
     delivered: z.number(),
     cancelled: z.number(),
+    /** Tiền VÀO — Σ `sellerPrice` các label seller tự mua (chưa hủy). */
+    sellerRevenue: z.number(),
+    /** Chi VNP của RIÊNG các label seller mua — margin seller = sellerRevenue − sellerCost. */
+    sellerCost: z.number(),
+    sellerLabelCount: z.number(),
   }),
   /** key = YYYY-MM (giờ VN), mới nhất trước. */
   byMonth: z.array(StatsBucketZod),
