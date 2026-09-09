@@ -32,6 +32,11 @@ export const customersRegistry: AgentTableSpec = {
     status: plain('string'),
     source: plain('string'),
 
+    // ── Ví seller (09/09/2026) — ĐỌC được, nhưng KHÔNG được nói cho khách:
+    // cùng nhóm kỷ luật "đọc được ≠ nói được" với giá vốn (`WhatYouCannotSee.md` §1b).
+    walletBalance: plain('number', 'Số dư ví seller (USD). CẤM đọc số này cho khách nghe — chỉ dùng để tự hiểu tình huống'),
+    creditLimit: plain('number', 'Hạn mức nợ admin cấp (USD); số dư xuống được tới -creditLimit. CẤM nói cho khách'),
+
     // ── `API-17` mở đọc
     notificationsReadAt: plain('date', 'Lần cuối khách mở danh sách thông báo'),
     updatedAt: plain('date'),

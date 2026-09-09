@@ -102,20 +102,24 @@ export function parseSellerShipPriceCsv(text: string): SellerShipPriceRow[] {
     .filter(Boolean);
   const rows: SellerShipPriceRow[] = [];
   for (let i = 0; i < lines.length; i++) {
-    const [w, p] = lines[i].split(',').map((s) => s.trim());
+    // `noUncheckedIndexedAccess` bật ở gói này — gán ra biến rồi mới dùng.
+    const dong = lines[i] ?? '';
+    const [w, p] = dong.split(',').map((s) => s.trim());
     // Header (`WEIGHT, PRICE`) — chỉ chấp nhận ở dòng đầu.
     if (i === 0 && (Number.isNaN(Number(w)) || Number.isNaN(Number(p)))) continue;
     const weightGram = Number(w);
     const price = Number(p);
     if (!Number.isInteger(weightGram) || weightGram <= 0 || !(price > 0)) {
-      throw new Error(`Dòng ${i + 1} không hợp lệ: "${lines[i]}" (cần "gram,giá" — gram nguyên dương, giá > 0)`);
+      throw new Error(`Dòng ${i + 1} không hợp lệ: "${dong}" (cần "gram,giá" — gram nguyên dương, giá > 0)`);
     }
     rows.push({ weightGram, price });
   }
   if (rows.length === 0) throw new Error('File không có dòng giá nào.');
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i].weightGram <= rows[i - 1].weightGram) {
-      throw new Error(`Mốc cân phải tăng dần: ${rows[i].weightGram}g (dòng ${i + 1}) <= ${rows[i - 1].weightGram}g`);
+    const nay = rows[i]!;
+    const truoc = rows[i - 1]!;
+    if (nay.weightGram <= truoc.weightGram) {
+      throw new Error(`Mốc cân phải tăng dần: ${nay.weightGram}g (dòng ${i + 1}) <= ${truoc.weightGram}g`);
     }
   }
   return rows;
