@@ -26,6 +26,12 @@
       "@/*": [
         "./src/*"
       ],
+      "react": [
+        "./node_modules/@types/react"
+      ],
+      "react-dom": [
+        "./node_modules/@types/react-dom"
+      ],
       "shared": [
         "../../packages/shared/index.ts"
       ],
