@@ -114,10 +114,16 @@ function dailyChart(x: number, y: number, w: number, h: number, rows: CeoOvervie
   const slot = w / data.length;
   const bw = Math.max(3, Math.min(14, slot / 2 - 3));
   // Lưới ngang + mốc trục: không có mốc thì người xem không đọc được độ lớn.
+  const daVe = new Set<string>();
   for (let i = 0; i <= 2; i++) {
     const gy = y + plotH - (plotH * i) / 2;
     out.push(`<line x1="${x}" y1="${gy}" x2="${x + w}" y2="${gy}" stroke="${C.line}" stroke-width="1"/>`);
-    out.push(text(x - 6, gy + 4, num((max * i) / 2), 10, C.muted, 'normal', 'end'));
+    // Bỏ mốc trùng: kỳ chưa có đơn nào thì `max` = 1 và ba mốc cùng làm tròn
+    // thành "1 / 1 / 0" — nhìn như ảnh hỏng dù số vẫn đúng.
+    const nhan = num((max * i) / 2);
+    if (daVe.has(nhan)) continue;
+    daVe.add(nhan);
+    out.push(text(x - 6, gy + 4, nhan, 10, C.muted, 'normal', 'end'));
   }
   data.forEach((r, i) => {
     const cx = x + slot * i + slot / 2;

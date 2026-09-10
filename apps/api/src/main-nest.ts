@@ -238,10 +238,17 @@ export async function bootstrapMicroservice() {
   // cron vẫn nổ hai lần (đã thử).
   await app.listen();
 
-  const scheduler = app.get(SchedulerRegistry, { strict: false });
-  const cronNames = [...scheduler.getCronJobs().keys()];
-  for (const name of cronNames) scheduler.deleteCronJob(name);
-  console.info(`Microservice: đã gỡ ${cronNames.length} lịch cron (hẹn giờ là việc của tiến trình HTTP)${cronNames.length ? ': ' + cronNames.join(', ') : ''}`);
+  // Bọc try/catch: tiến trình này còn nuôi consumer RabbitMQ (mail). Ném ở đây
+  // là mất luôn consumer — dọn lịch hỏng thì tệ, nhưng không đáng đánh đổi bằng
+  // việc hệ thống ngừng gửi mail.
+  try {
+    const scheduler = app.get(SchedulerRegistry, { strict: false });
+    const cronNames = [...scheduler.getCronJobs().keys()];
+    for (const name of cronNames) scheduler.deleteCronJob(name);
+    console.info(`Microservice: đã gỡ ${cronNames.length} lịch cron (hẹn giờ là việc của tiến trình HTTP)${cronNames.length ? ': ' + cronNames.join(', ') : ''}`);
+  } catch (e) {
+    console.error('Microservice: KHÔNG gỡ được lịch cron — cron sẽ chạy hai lần:', e instanceof Error ? e.message : e);
+  }
   console.info('Microservice is listening...');
 }
 
