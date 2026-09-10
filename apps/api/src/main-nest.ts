@@ -233,10 +233,12 @@ export async function bootstrapMicroservice() {
   //
   // Hẹn giờ là việc của tiến trình HTTP; việc của tiến trình này là nghe RMQ.
   // Gỡ lịch Ở ĐÂY, một chỗ, để cron THÊM SAU NÀY cũng không dính lại lỗi này.
-  // PHẢI gỡ SAU `listen()`: `ScheduleModule` chỉ quét và đăng ký lịch ở hook
-  // bootstrap, mà hook đó chạy trong `listen()`. Gỡ trước thì danh sách rỗng và
-  // cron vẫn nổ hai lần (đã thử).
-  await app.listen();
+  // `init()` chạy hook bootstrap — `ScheduleModule` quét và đăng ký `@Cron` ở
+  // ĐÚNG bước này. Gọi tường minh để gỡ được lịch mà KHÔNG phải chờ `listen()`:
+  // đo trên prod 11/09/2026, `listen()` của transport RMQ không bao giờ trả về
+  // (log chưa từng có dòng "Microservice is listening"), trong khi cron ở context
+  // này vẫn nổ — đặt phần gỡ sau `listen()` là fix vô tác dụng ĐÚNG ở nơi cần.
+  await app.init();
 
   // Bọc try/catch: tiến trình này còn nuôi consumer RabbitMQ (mail). Ném ở đây
   // là mất luôn consumer — dọn lịch hỏng thì tệ, nhưng không đáng đánh đổi bằng
@@ -249,6 +251,8 @@ export async function bootstrapMicroservice() {
   } catch (e) {
     console.error('Microservice: KHÔNG gỡ được lịch cron — cron sẽ chạy hai lần:', e instanceof Error ? e.message : e);
   }
+
+  await app.listen();
   console.info('Microservice is listening...');
 }
 
