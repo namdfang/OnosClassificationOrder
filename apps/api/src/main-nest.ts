@@ -6,6 +6,7 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import type { MicroserviceOptions } from '@nestjs/microservices';
 import { Transport } from '@nestjs/microservices';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { SchedulerRegistry } from '@nestjs/schedule';
 // import compression from 'compression';
 import { CustomExceptionFilter, UnprocessableEntityFilter } from 'core';
 import helmet from 'helmet';
@@ -224,7 +225,23 @@ export async function bootstrapMicroservice() {
     },
   });
 
+  // Tiến trình này nạp CÙNG `AppModule` với tiến trình HTTP (`main.ts` gọi cả
+  // hai), nên `ScheduleModule` đăng ký MỌI `@Cron` hai lần và tới giờ chúng nổ
+  // hai lần. Đo trên prod 10/09/2026: mỗi báo cáo CEO sinh 2 bản cách nhau 1
+  // giây, tức mỗi ngày gọi Agent SDK gấp đôi — tốn tiền thật, chưa kể cron nào
+  // ghi dữ liệu thì chạy đúp.
+  //
+  // Hẹn giờ là việc của tiến trình HTTP; việc của tiến trình này là nghe RMQ.
+  // Gỡ lịch Ở ĐÂY, một chỗ, để cron THÊM SAU NÀY cũng không dính lại lỗi này.
+  // PHẢI gỡ SAU `listen()`: `ScheduleModule` chỉ quét và đăng ký lịch ở hook
+  // bootstrap, mà hook đó chạy trong `listen()`. Gỡ trước thì danh sách rỗng và
+  // cron vẫn nổ hai lần (đã thử).
   await app.listen();
+
+  const scheduler = app.get(SchedulerRegistry, { strict: false });
+  const cronNames = [...scheduler.getCronJobs().keys()];
+  for (const name of cronNames) scheduler.deleteCronJob(name);
+  console.info(`Microservice: đã gỡ ${cronNames.length} lịch cron (hẹn giờ là việc của tiến trình HTTP)${cronNames.length ? ': ' + cronNames.join(', ') : ''}`);
   console.info('Microservice is listening...');
 }
 

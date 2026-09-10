@@ -6,6 +6,7 @@ import { Model } from 'mongoose';
 import type { CeoOverview, CeoReport, CeoReportKind } from 'shared';
 
 import { tachJson } from '../zalo-group/zalo-summary.logic';
+import { buildCeoChartSvg } from './ceo-chart';
 import { CeoDashboardService } from './ceo-dashboard.service';
 import { CeoReportDocument, CeoReportEntity } from './ceo-report.entity';
 
@@ -76,6 +77,28 @@ export class CeoReportService {
   async getLatest(from: string, to: string): Promise<CeoReport | null> {
     const doc = await this.reportModel.findOne({ periodKey: `${from}_${to}` }).sort({ generatedAt: -1 }).lean();
     return doc ? this.toDto(doc as unknown as CeoReportEntity & { _id: unknown }) : null;
+  }
+
+  /**
+   * Ảnh báo cáo (PNG) cho kỳ — thứ agent tải về rồi gửi thẳng Telegram/Zalo.
+   *
+   * Dựng TẠI MÁY CHỦ, agent không phải vẽ gì. Dùng lại `getOverview` (đã cache
+   * 5 phút) nên gọi nhiều lần trong một kỳ gần như không tốn gì; nhận định thì
+   * lấy bản mới nhất của kỳ, chưa có thì ảnh chỉ gồm số liệu.
+   *
+   * KHÔNG lưu ảnh vào Mongo: nhị phân trong document sẽ lọt ra `POST
+   * /agent/query` (API-19 mở hết mọi bảng) làm phồng phản hồi, mà dựng lại chỉ
+   * mất vài chục mili giây.
+   */
+  async renderChartPng(from: string, to: string): Promise<Buffer> {
+    const [overview, report] = await Promise.all([this.dashboard.getOverview(from, to), this.getLatest(from, to)]);
+    const svg = buildCeoChartSvg({ overview, report });
+
+    // `sharp` nạp động: module này còn được nạp ở tiến trình microservice, và
+    // nhị phân native của sharp không cần thiết ở đó.
+    const sharp = (await import('sharp')).default;
+
+    return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
   }
 
   /** Sinh nhận định mới cho kỳ; đang chạy cùng kỳ → 409. */

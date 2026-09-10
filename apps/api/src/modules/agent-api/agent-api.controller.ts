@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, UseFilters, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, Res, UseFilters, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { CeoOverview, CeoReport } from 'shared';
@@ -19,6 +19,8 @@ import {
 import { Logger } from 'winston';
 
 import { Auth } from '@/decorators';
+import type { FastifyReply } from 'fastify';
+
 import { SWAGGER_AGENT_KEY_SECURITY } from '@/setup-swagger';
 
 import { CeoDashboardService } from '../ceo-dashboard/ceo-dashboard.service';
@@ -280,6 +282,33 @@ export class AgentApiController {
     const report = await this.ceoReports.getLatest(q.from, q.to);
     this.audit.write({ capability: 'ceo_report', queryDigest: { from: q.from, to: q.to }, returned: report ? 1 : 0, durationMs: Date.now() - startedAt, outcome: 'ok' });
     return { success: true, data: { report, generating: this.ceoReports.isGenerating(q.from, q.to) } };
+  }
+
+  /**
+   * Ảnh báo cáo dựng SẴN phía máy chủ (PNG) — agent tải rồi gửi thẳng
+   * Telegram/Zalo, KHÔNG phải tự vẽ.
+   *
+   * Nhận MỌI khoảng ngày (khác `ceo-report` vốn phải khớp đúng kỳ đã sinh): số
+   * liệu luôn dựng được, còn nhận định thì có mới in, chưa có thì ảnh chỉ gồm
+   * số. Trả nhị phân nên KHÔNG bọc `{success, data}` như các endpoint khác.
+   */
+  @Get('ceo-report/chart.png')
+  @Auth([], [], { public: true })
+  @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
+  @ApiOperation({ summary: 'Ảnh PNG báo cáo điều hành cho kỳ (from/to) — dựng sẵn để gửi Telegram/Zalo' })
+  @HttpCode(HttpStatus.OK)
+  async getCeoReportChart(@Query() q: CeoOverviewQueryDto, @Res() reply: FastifyReply): Promise<void> {
+    const startedAt = Date.now();
+    this.log('GET', '/agent/ceo-report/chart.png');
+    const png = await this.ceoReports.renderChartPng(q.from, q.to);
+    this.audit.write({ capability: 'ceo_report_chart', queryDigest: { from: q.from, to: q.to }, returned: 1, durationMs: Date.now() - startedAt, outcome: 'ok' });
+    void reply
+      .header('content-type', 'image/png')
+      .header('content-disposition', `inline; filename="ceo-${q.from}_${q.to}.png"`)
+      // Ảnh của một kỳ đã chốt không đổi nữa; cho phép cache ngắn để agent gọi
+      // lại nhiều lần trong một phiên trả lời không dựng lại.
+      .header('cache-control', 'private, max-age=300')
+      .send(png);
   }
 
   @Get('docs')
