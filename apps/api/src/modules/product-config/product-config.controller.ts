@@ -58,8 +58,9 @@ export class ProductConfigController {
   ) {}
 
   @Get()
-  // AUTH-6 — Support ĐỌC được (trang /adm/products). Các route GHI bên dưới GIỮ NGUYÊN
-  // Admin+Manager: chặn lớp API, không phụ thuộc việc giao diện có ẩn nút hay không.
+  // AUTH-6 — Support ĐỌC được (trang /adm/products). Từ 10/09/2026 Support được thêm
+  // quyền TẠO + SỬA sản phẩm (GET :id / POST / PATCH :id / upload-image); các route
+  // còn lại (delete, import*, crawl*) GIỮ NGUYÊN Admin+Manager.
   @Auth([RoleType.Admin, RoleType.Manager, RoleType.Support])
   @ApiOperation({ summary: 'List product configs' })
   @HttpCode(HttpStatus.OK)
@@ -79,7 +80,7 @@ export class ProductConfigController {
   }
 
   @Get(':id')
-  @Auth([RoleType.Admin, RoleType.Manager])
+  @Auth([RoleType.Admin, RoleType.Manager, RoleType.Support])
   @ApiOperation({ summary: 'Get 1 product config by id' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: GetProductConfigResDto })
@@ -101,7 +102,7 @@ export class ProductConfigController {
   }
 
   @Post()
-  @Auth([RoleType.Admin, RoleType.Manager])
+  @Auth([RoleType.Admin, RoleType.Manager, RoleType.Support])
   @ApiOperation({ summary: 'Create product config' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: CreateProductConfigResDto })
@@ -110,7 +111,7 @@ export class ProductConfigController {
   }
 
   @Patch(':id')
-  @Auth([RoleType.Admin, RoleType.Manager])
+  @Auth([RoleType.Admin, RoleType.Manager, RoleType.Support])
   @ApiOperation({ summary: 'Update product config' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: UpdateProductConfigResDto })
@@ -185,7 +186,8 @@ export class ProductConfigController {
   }
 
   @Post('upload-image')
-  @Auth([RoleType.Admin, RoleType.Manager])
+  // Support cần upload mockup/size-chart khi tạo/sửa sản phẩm (MockupImagesEditor).
+  @Auth([RoleType.Admin, RoleType.Manager, RoleType.Support])
   @ApiOperation({ summary: 'Upload mockup/size-chart image (lưu local disk, KHÔNG qua S3/Backblaze)' })
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({ type: UploadProductImageResDto })
