@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { RepositoryRemote } from '@/services';
 
 import { ImpersonationBanner } from '@/components/auth/ImpersonationBanner';
+import OverdueAlertBanner from '@/components/common/OverdueAlertBanner';
 
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
@@ -61,8 +62,9 @@ function MainLayout() {
           collapsed={collapsed}
           isMobile={isMobile}
         />
-        {/* Banner đỏ quá hạn 2 ngày (`OverdueAlertBanner`) ĐÃ GỠ khỏi layout 07/09/2026 —
-            component + endpoint giữ nguyên, sẽ đặt ở vị trí khác (OverdueAlertBanner.md). */}
+        {/* Banner đỏ quá hạn 2 ngày — từng bị gỡ 07/09/2026 khi redesign workshop board,
+            gắn lại 10/09/2026 theo yêu cầu user (OverdueAlertBanner.md). */}
+        <OverdueAlertBanner />
         {/* `flex flex-col`: trang nào muốn CHIẾM ĐỦ chiều cao (bảng tự cuộn, chân bảng đứng yên) chỉ cần
             `flex-1 min-h-0` trên root của nó; trang thường vẫn cao theo nội dung và <main> cuộn như cũ. */}
         <main className="flex flex-1 flex-col overflow-auto p-4 md:p-6">

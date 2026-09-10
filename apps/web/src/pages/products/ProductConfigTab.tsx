@@ -166,7 +166,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
   const { confirm, confirmDialog } = useConfirm();
   // AUTH-6 - vai chi DOC (Support) van xem duoc bang nhung khong sua duoc gi.
   // Day chi la lop giao dien; API van tu choi moi route ghi cua vai nay.
-  const { canWriteProducts } = useProductWriteAccess();
+  const { canWriteProducts, canManageProducts } = useProductWriteAccess();
   const navigate = useNavigate();
   const STATUS_META = useMemo(() => buildStatusMeta(t), [t]);
   const [items, setItems] = useState<ProductConfigRow[]>([]);
@@ -800,7 +800,7 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                   </div>
                 </TableCell>
                 <TableCell>
-                  {/* AUTH-6 - an han voi vai chi doc: sua/xoa deu la thao tac ghi. */}
+                  {/* AUTH-6 — Support được SỬA (canWriteProducts) nhưng KHÔNG được XÓA (canManageProducts). */}
                   {canWriteProducts && (
                     <div className="flex items-center gap-0.5">
                       <Button
@@ -811,14 +811,16 @@ export function ProductConfigTab({ refreshKey = 0 }: ProductConfigTabProps) {
                       >
                         <Pencil size={14} />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(it._id, it.fullName)}
-                        title={t('configTab.table.deleteTitle')}
-                      >
-                        <Trash2 size={14} className="text-destructive" />
-                      </Button>
+                      {canManageProducts && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(it._id, it.fullName)}
+                          title={t('configTab.table.deleteTitle')}
+                        >
+                          <Trash2 size={14} className="text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   )}
                 </TableCell>
