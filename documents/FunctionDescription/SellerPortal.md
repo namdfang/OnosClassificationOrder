@@ -316,7 +316,22 @@ Còn chậm (chưa làm): `status=completed` và tính lại counts/stats nền 
 - **Redirect `/customer/*` ở admin** (`apps/web/src/App.tsx` `SellerRedirectGate`): khi `VITE_SELLER_URL` khác rỗng, `/customer/login|dashboard|orders|orders/new|orders/import|orders/:productionId|account` chuyển hẳn sang seller (`/login`, `/portal`, `/portal/orders`, `/portal/orders/create|import|:pid`, `/portal/account`, giữ query). Catalog/API docs/`/track`/landing vẫn ở `apps/web` tới đợt 2. Rỗng → chạy như cũ.
 - R2: thêm origin seller (dev + prod) vào CORS bucket trước khi bật upload trực tiếp (DesignStorage.md).
 
-### 8.2 Máy dev tự kéo theo nhánh `dev` (08/09/2026)
+### 8.2 Mô hình nhánh + máy dev tự kéo theo nhánh `dev` (08/09/2026, chốt lại 10/09/2026)
+
+**Mô hình nhánh** (chốt 10/09/2026 để nhiều dev vào chung được):
+
+```
+nhánh riêng của bạn  →  dev  →  main  →  prod
+```
+
+| Nhánh | Vai trò |
+|---|---|
+| nhánh riêng / `feat/*` | chỗ làm việc, cắt ra từ `dev` |
+| **`dev`** | nhánh TÍCH HỢP — code mọi người gặp nhau; **máy dev bám đúng nhánh này** |
+| **`main`** | nhánh PHÁT HÀNH — merge `dev` vào đây rồi mới `./deploy.sh` trên prod |
+
+KHÔNG có `master`. Nhánh `develop` cũ (dừng ở 28/08/2026, sau `main` 127 commit, không hơn commit nào) **đã chết** — đừng dùng. Nhánh cá nhân `tuantran` đã **xoá 10/09/2026**: một mình thì tiện, thêm người là hai luật, và dev server bám nhánh cá nhân khiến người khác merge vào `dev` mà không thấy gì đổi.
+
 
 Máy dev (`ubuntu-server`) chạy **một** cây làm việc `/root/.vibedev/repos/onos` với ba service tự nạp lại: `onos-api-dev` (nodemon, 3007) · `onos-web-dev` (vite, 5173) · `onos-seller-dev` (next dev, 3017), phơi ra qua cloudflared thành `dev-onos` / `api-dev-onos` / `seller-dev-onos` `.autonow.vn`.
 
@@ -325,7 +340,8 @@ Máy dev (`ubuntu-server`) chạy **một** cây làm việc `/root/.vibedev/rep
 - Chỉ đụng nhánh `dev`; các nhánh khác đẩy lên không ảnh hưởng gì tới máy này.
 - Không bao giờ `reset --hard`: nhánh lệch, hoặc còn file **đang theo dõi** chưa commit (đang sửa dở trên máy) thì bỏ lượt và ghi log. File lạ chưa theo dõi không chặn.
 - Cài/gỡ: `./dev-autopull.sh --install` · `systemctl disable --now onos-dev-autopull.timer`. Đổi nhánh: `ONOS_DEV_BRANCH=<nhánh> ./dev-autopull.sh --install`. Log: `/var/log/onos-dev-autopull.log`.
-- Kiểm 08/09/2026: lùi cây làm việc 1 commit, 60 giây sau timer tự kéo lên và ghi đúng một dòng log.
+- Kiểm 08/09 và 10/09/2026: lùi cây làm việc 1 commit, 60 giây sau timer tự kéo lên và ghi đúng một dòng log.
+- **Cây làm việc CHÍNH LÀ dev server.** Ai ngồi trực tiếp máy này thì sửa file là dev đổi ngay (watcher tự nạp), nhưng đổi lại: còn file chưa commit thì auto-pull bỏ lượt, nên bản trên `dev` của người khác tạm thời chưa lên. Commit hoặc stash là lượt sau chạy tiếp. Tệ hơn là **commit ở máy mà quên push**: người khác push `dev` thì hai bên lệch nhau, script dừng hẳn và ghi `DỪNG: nhánh trên máy dev đã lệch` — phải vào gỡ tay. Xem log trước khi nghi ngờ máy hỏng.
 
 Prod vẫn deploy **tay** bằng `./deploy.sh` trên máy prod, không có cổng CI tự động (nhóm chốt: ai làm nấy tự kiểm rồi tự đẩy). `deploy.sh` nay nhận cả tên nhánh lẫn một SHA đầy đủ, nên đẩy đúng một commit cụ thể được: `./deploy.sh <sha>`.
 
