@@ -6,6 +6,44 @@
 > **Route:** `/adm/zalo-groups`
 > **API:** `GET /v1/zalo-groups`, `GET /v1/zalo-groups/coverage`, `GET /v1/zalo-groups/suggestions`, `POST /v1/zalo-groups/sync`, `PATCH /v1/zalo-groups/:id`
 
+
+## Nối nhóm ↔ khách: gợi ý theo khuôn tên + tạo khách ngay tại màn nối (11/09/2026)
+
+Mục tiêu: biến trang này thành **source of truth** cho quan hệ nhóm Zalo ↔ khách, thay vì chỉ nối được tới những khách do đơn hàng sinh ra.
+
+### Vì sao đổi
+
+Đo trên prod 11/09/2026, trong **52 nhóm chưa xét**, luật cũ (`title.includes(userSku)`) chỉ gợi ý được **7**. Soi phần trượt thì thấy **hai nguyên nhân khác hẳn nhau**:
+
+1. **Luật khớp quá thô** — tên nhóm có khuôn `OnosPod/ 2025/ TUYEN/ KL/ TOPUP` và mã hay dính đuôi loại tài khoản (`VUDANDEBIT`, `SIMPLEHUBDEBIT`, `XHAODEBIT`). So chuỗi con bỏ sót cả hai.
+2. **Không có gì để khớp vào** — 19 nhóm trỏ tới seller THẬT (`TRINITY`, `VUDAN`, `SIMPLEHUB`, `ANHDUC06`…) nhưng **0 đơn hàng**, mà bảng `customers` sinh ra TỪ đơn hàng nên những seller đó không tồn tại. Không thuật toán nào cứu được; những nhóm này trước đây biến khỏi danh sách gợi ý mà không ai biết vì sao.
+
+### Cách làm
+
+`apps/api/src/modules/zalo-group/zalo-title.logic.ts` (hàm thuần + `zalo-title.logic.spec.ts`, test dùng **tên nhóm nguyên văn từ prod**):
+
+- `macUngVien(title)` — tách theo `/`, rồi theo khoảng trắng và ngoặc; bỏ năm, bỏ từ chung (`ONOSPOD`, `VIP`, `KL`, `DEBIT`…); cắt đuôi loại tài khoản nhưng **giữ cả bản đầy đủ**, mã dài đứng trước.
+- `theoKhuonSeller(title)` — có tiền tố `onospod`/`onosex` và ≥ 3 đoạn `/`. **Chỉ nhóm theo khuôn này mới được đề nghị tạo khách mới**; nhóm nội bộ đặt tên tự do ("Nhóm vải siêm - A Soi Mê Linh") vẫn moi ra được vài từ trông như mã, đề nghị tạo khách từ đó là đẩy rác vào bảng khách mà rác ở đó rất khó dọn.
+- **Bỏ dấu TRƯỚC khi lọc ký tự.** Làm ngược lại thì "Nhóm" thành `NHM`, "Việt" thành `VIT` — mã rác trông y như mã thật (lỗi đã mắc ở bản đầu).
+
+`ZaloGroupSuggestionZod` thêm `action: 'link' | 'create'`; `customerId` thành tuỳ chọn (chỉ có với `link`).
+
+`UpdateZaloGroupLinkZod` thêm **`newCustomerSku`** — tạo khách mang mã đó rồi ghép trong CÙNG một lần gọi. Mã đã tồn tại thì ghép vào khách đó, **không tạo trùng**. Loại trừ lẫn nhau với `customerId`. Chốt "nhóm khách phải có khách" ở `updateLink` cũng tính `newCustomerSku`, nếu không thì thao tác thường gặp nhất của ops (đặt loại "nhóm khách" + tạo khách mới trong một lần bấm) bị chính chốt đó từ chối.
+
+**Kết quả đo lại trên 52 nhóm đó:** 2 ghép khách sẵn có + 17 đề nghị tạo khách = **19 nhóm xử lý được**, 26 nhóm còn lại không đề nghị gì (đúng — chúng là nhóm vận hành/nội bộ).
+
+### Bẫy đã vá: khách tạo từ nhóm bị nhân đôi
+
+Khách tạo ở đây chưa biết email nên mang `userEmail: ''`. Nhưng unique index của `customers` là cặp **(userSku, userEmail)**, và `CustomerService.sync()` upsert theo đúng cặp đó — nên khi seller bắt đầu đặt đơn với email thật, sync sẽ tạo **bản ghi thứ hai** cho cùng một seller và mọi báo cáo theo khách đếm đôi.
+
+`sync()` nay **nhận lại chỗ giữ sẵn** trước khi upsert: mã nào đang có bản ghi email rỗng thì điền email vào bản ghi đó (mỗi mã nhận một email; mã có nhiều email thì phần upsert tạo nốt như cũ). Cùng khuôn "claim" mà khách tự đăng ký đang dùng. Kiểm trên dev 11/09/2026: tạo khách từ nhóm → cắm một đơn mang email thật → chạy sync → vẫn **đúng 1 bản ghi**, và nó mang email mới.
+
+### Giao diện cho ops
+
+- **Hộp gợi ý**: dòng `create` có nhãn "sẽ tạo khách mới" để người duyệt phân biệt với dòng ghép thường; tick sẵn như cũ, vẫn phải bấm nút.
+- **Hộp sửa nhóm**: khi chọn loại "nhóm khách", dưới ô chọn khách có thêm ô gõ mã khách mới (tự viết hoa, khoá lại khi đã chọn khách sẵn có).
+- Đánh dấu "không phải nhóm khách" thì dùng ô phân loại sẵn có — chuyển sang `operation`/`internal` là nhóm rời khỏi hàng chờ.
+
 ## 1. Overview
 
 Nối mỗi **nhóm Zalo** với **khách hàng (seller)** trong OnosFactory, để về sau

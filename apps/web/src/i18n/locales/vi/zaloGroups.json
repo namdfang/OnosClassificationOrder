@@ -45,7 +45,8 @@
     "applyAll": "Gắn tất cả dòng đã chọn",
     "applied": "Đã gắn {{count}} nhóm",
     "empty": "Không có gợi ý nào — mọi nhóm còn lại phải gắn tay",
-    "selectAll": "Chọn tất cả"
+    "selectAll": "Chọn tất cả",
+    "willCreate": "sẽ tạo khách mới"
   },
   "edit": {
     "title": "Gắn nhóm",
@@ -59,7 +60,10 @@
     "selectOwner": "Chọn người phụ trách…",
     "clear": "Bỏ chọn",
     "save": "Lưu",
-    "saved": "Đã lưu nhóm \"{{title}}\""
+    "saved": "Đã lưu nhóm \"{{title}}\"",
+    "newCustomer": "Khách chưa có trong danh sách?",
+    "newCustomerPlaceholder": "Gõ mã khách, ví dụ TRINITY",
+    "newCustomerHint": "Tạo khách mới mang mã này rồi ghép luôn. Mã đã có thì ghép vào khách đó, không tạo trùng."
   },
   "tab": {
     "groups": "Nhóm",
