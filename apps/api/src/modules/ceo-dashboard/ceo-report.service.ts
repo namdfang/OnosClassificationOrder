@@ -1,5 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { ConflictException, Injectable, Logger, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
+import { HttpAdapterHost } from '@nestjs/core';
 import { InjectModel } from '@nestjs/mongoose';
 import { Cron } from '@nestjs/schedule';
 import { Model } from 'mongoose';
@@ -9,6 +10,7 @@ import { tachJson } from '../zalo-group/zalo-summary.logic';
 import { buildCeoChartSvg } from './ceo-chart';
 import { CeoDashboardService } from './ceo-dashboard.service';
 import { CeoReportDocument, CeoReportEntity } from './ceo-report.entity';
+import { laTienTrinhChayCron } from '@/utils/cron-guard';
 
 const TZ = 'Asia/Ho_Chi_Minh';
 const MODEL = process.env.CEO_REPORT_MODEL || process.env.ZALO_SUMMARY_MODEL || 'opus';
@@ -68,6 +70,7 @@ export class CeoReportService {
   constructor(
     @InjectModel(CeoReportEntity.name) private readonly reportModel: Model<CeoReportDocument>,
     private readonly dashboard: CeoDashboardService,
+    private readonly adapterHost: HttpAdapterHost,
   ) {}
 
   isGenerating(from: string, to: string): boolean {
@@ -148,18 +151,24 @@ export class CeoReportService {
   // ── Cron (giờ VN) — bỏ qua im lặng khi tắt bằng env; lỗi chỉ ghi log, không làm hỏng tiến trình. ──
   @Cron('0 7 * * *', { name: 'ceo-report-daily', timeZone: TZ })
   async cronDaily(): Promise<void> {
+    // Chỉ chạy ở tiến trình HTTP — xem `utils/cron-guard.ts`.
+    if (!laTienTrinhChayCron(this.adapterHost)) return;
     if (!CRON_ENABLED) return;
     const y = vnDay(new Date(Date.now() - 864e5));
     await this.chayCron(y, y);
   }
   @Cron('10 7 * * 1', { name: 'ceo-report-weekly', timeZone: TZ })
   async cronWeekly(): Promise<void> {
+    // Chỉ chạy ở tiến trình HTTP — xem `utils/cron-guard.ts`.
+    if (!laTienTrinhChayCron(this.adapterHost)) return;
     if (!CRON_ENABLED) return;
     const sun = new Date(Date.now() - 864e5);
     await this.chayCron(vnDay(new Date(sun.getTime() - 6 * 864e5)), vnDay(sun));
   }
   @Cron('20 7 1 * *', { name: 'ceo-report-monthly', timeZone: TZ })
   async cronMonthly(): Promise<void> {
+    // Chỉ chạy ở tiến trình HTTP — xem `utils/cron-guard.ts`.
+    if (!laTienTrinhChayCron(this.adapterHost)) return;
     if (!CRON_ENABLED) return;
     const lastDay = new Date(Date.now() - 864e5);
     const to = vnDay(lastDay);

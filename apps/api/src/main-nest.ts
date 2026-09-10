@@ -6,7 +6,6 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import type { MicroserviceOptions } from '@nestjs/microservices';
 import { Transport } from '@nestjs/microservices';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
-import { SchedulerRegistry } from '@nestjs/schedule';
 // import compression from 'compression';
 import { CustomExceptionFilter, UnprocessableEntityFilter } from 'core';
 import helmet from 'helmet';
@@ -233,25 +232,16 @@ export async function bootstrapMicroservice() {
   //
   // Hẹn giờ là việc của tiến trình HTTP; việc của tiến trình này là nghe RMQ.
   // Gỡ lịch Ở ĐÂY, một chỗ, để cron THÊM SAU NÀY cũng không dính lại lỗi này.
-  // `init()` chạy hook bootstrap — `ScheduleModule` quét và đăng ký `@Cron` ở
-  // ĐÚNG bước này. Gọi tường minh để gỡ được lịch mà KHÔNG phải chờ `listen()`:
-  // đo trên prod 11/09/2026, `listen()` của transport RMQ không bao giờ trả về
-  // (log chưa từng có dòng "Microservice is listening"), trong khi cron ở context
-  // này vẫn nổ — đặt phần gỡ sau `listen()` là fix vô tác dụng ĐÚNG ở nơi cần.
-  await app.init();
-
-  // Bọc try/catch: tiến trình này còn nuôi consumer RabbitMQ (mail). Ném ở đây
-  // là mất luôn consumer — dọn lịch hỏng thì tệ, nhưng không đáng đánh đổi bằng
-  // việc hệ thống ngừng gửi mail.
-  try {
-    const scheduler = app.get(SchedulerRegistry, { strict: false });
-    const cronNames = [...scheduler.getCronJobs().keys()];
-    for (const name of cronNames) scheduler.deleteCronJob(name);
-    console.info(`Microservice: đã gỡ ${cronNames.length} lịch cron (hẹn giờ là việc của tiến trình HTTP)${cronNames.length ? ': ' + cronNames.join(', ') : ''}`);
-  } catch (e) {
-    console.error('Microservice: KHÔNG gỡ được lịch cron — cron sẽ chạy hai lần:', e instanceof Error ? e.message : e);
-  }
-
+  // KHÔNG dọn lịch cron ở đây.
+  //
+  // Đã thử hai cách và cả hai đều sai (11/09/2026): gỡ SAU `listen()` thì trên
+  // prod không bao giờ chạy vì `listen()` của transport RMQ không trả về; gọi
+  // `init()` trước để gỡ thì `listen()` đăng ký lịch LẦN NỮA trong cùng context
+  // → trùng tên → `SchedulerRegistry` ném và sập cả tiến trình.
+  //
+  // Chốt thật nằm trong THÂN từng cron (`utils/cron-guard.ts`): lịch vẫn được
+  // đăng ký ở context này nhưng tới giờ thì thoát ngay. Cách đó không phụ thuộc
+  // vào việc bootstrap chạy tới đâu.
   await app.listen();
   console.info('Microservice is listening...');
 }
