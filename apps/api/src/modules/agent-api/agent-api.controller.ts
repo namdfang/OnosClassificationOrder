@@ -21,10 +21,13 @@ import { Logger } from 'winston';
 import { Auth } from '@/decorators';
 import type { FastifyReply } from 'fastify';
 
+import type { GetCustomerReportResDto } from 'shared';
+
 import { SWAGGER_AGENT_KEY_SECURITY } from '@/setup-swagger';
 
 import { CeoDashboardService } from '../ceo-dashboard/ceo-dashboard.service';
 import { CeoReportService } from '../ceo-dashboard/ceo-report.service';
+import { CustomerReportService } from '../customer-report/customer-report.service';
 import { AGENT_API_RATE_LIMIT_PER_MIN, AGENT_API_RATE_LIMIT_TTL_MS } from './agent-api.constants';
 import { AgentApiKeyGuard } from './agent-api-key.guard';
 import { AgentAuditService } from './agent-audit.service';
@@ -98,6 +101,7 @@ export class AgentApiController {
     private readonly sellerSupport: AgentSellerSupportService,
     private readonly ceo: CeoDashboardService,
     private readonly ceoReports: CeoReportService,
+    private readonly customerReports: CustomerReportService,
     private readonly audit: AgentAuditService,
     @Inject('winston') private readonly logger: Logger,
   ) {}
@@ -292,6 +296,25 @@ export class AgentApiController {
    * liệu luôn dựng được, còn nhận định thì có mới in, chưa có thì ảnh chỉ gồm
    * số. Trả nhị phân nên KHÔNG bọc `{success, data}` như các endpoint khác.
    */
+  /**
+   * Báo cáo KHÁCH HÀNG cho kỳ — song song `ceo-report`, cùng luật khớp
+   * `periodKey` chính xác. Cron sinh 07:15 mỗi sáng cho cửa sổ 7 ngày kết thúc
+   * ở hôm qua; kỳ khác thì `null` cho tới khi có người sinh.
+   */
+  @Get('customer-report')
+  @Auth([], [], { public: true })
+  @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
+  @ApiOperation({ summary: 'Báo cáo khách hàng cho kỳ (from/to) — tiếng Việt viết sẵn, kèm khách tăng/tụt và vướng mắc' })
+  @HttpCode(HttpStatus.OK)
+  async getCustomerReport(@Query() q: CeoOverviewQueryDto): Promise<GetCustomerReportResDto> {
+    const startedAt = Date.now();
+    this.log('GET', '/agent/customer-report');
+    const report = await this.customerReports.getLatest(q.from, q.to);
+    this.audit.write({ capability: 'customer_report', queryDigest: { from: q.from, to: q.to }, returned: report ? 1 : 0, durationMs: Date.now() - startedAt, outcome: 'ok' });
+
+    return { success: true, data: { report, generating: this.customerReports.isGenerating(q.from, q.to) } };
+  }
+
   @Get('ceo-report/chart.png')
   @Auth([], [], { public: true })
   @Throttle({ default: { limit: AGENT_API_RATE_LIMIT_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
