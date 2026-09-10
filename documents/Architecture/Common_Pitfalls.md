@@ -380,6 +380,39 @@ của `CACHE_MANAGER` bị Redis đóng vì `timeout 300` trong `D:\dev\redis\re
 - Code trong catch block phải "không được ném": lệnh đầu tiên của catch mà ném thì toàn bộ xử lý lỗi phía sau (refund, dịch mã lỗi) chết theo. Nghi ngờ gì thì log SAU khi làm việc quan trọng (hoàn tiền trước, log sau).
 - Test nhánh lỗi bằng cách ép dependency fail thật (thiếu config, service down) — unit test mock logger đủ method nên không bao giờ bắt được lỗi này.
 
+## 11. ⚠️ Một tiến trình, HAI Nest context → mọi `@Cron` đăng ký hai lần và chạy hai lần
+
+`apps/api/src/main.ts` gọi **cả** `bootstrap()` lẫn `bootstrapMicroservice()`, hai context cùng nạp `AppModule` trong MỘT tiến trình Node. Hệ quả: `ScheduleModule` quét và đăng ký mọi `@Cron` hai lần.
+
+**Đo trên prod 10–11/09/2026:** mỗi báo cáo CEO sinh **2 bản cách nhau 1 giây** (gọi Agent SDK gấp đôi — tiền thật), và báo cáo Telegram theo lịch gửi **2 lần**. Khoá chống trùng trong bộ nhớ (`Set`, cờ `running`) **KHÔNG cứu được**: hai context giữ hai thực thể service khác nhau nên mỗi bên có khoá riêng.
+
+### Cách SAI đã thử (đừng lặp lại)
+
+| Cách | Vì sao hỏng |
+|---|---|
+| Gỡ lịch bằng `SchedulerRegistry` **sau `app.listen()`** ở tiến trình microservice | Trên prod `listen()` của transport RMQ **không bao giờ trả về** (log chưa từng có dòng "Microservice is listening"), trong khi cron ở context đó vẫn nổ → fix vô tác dụng đúng ở nơi cần nhất. Dev thì `listen()` xong nên nhìn như đã sửa |
+| Gọi `app.init()` trước rồi gỡ, sau đó `listen()` | `listen()` đăng ký lịch **lần nữa** trong cùng context → trùng tên → `SchedulerRegistry` **ném và sập cả tiến trình**. Dev crash-loop tới khi revert |
+
+### Cách ĐÚNG
+
+Chốt nằm trong **thân từng cron**, không phải quanh bootstrap — `apps/api/src/utils/cron-guard.ts`:
+
+```ts
+@Cron('0 7 * * *', { name: '...' })
+async cronDaily(): Promise<void> {
+  if (!laTienTrinhChayCron(this.adapterHost)) return;
+  ...
+}
+```
+
+Dấu hiệu nhận biết context: **không có HTTP adapter = tiến trình microservice** (cùng dấu hiệu `ZaloProxyService` dùng để không gắn proxy). Lịch vẫn được đăng ký ở cả hai context, nhưng tới giờ thì một bên thoát ngay — không phụ thuộc vào việc bootstrap chạy tới đâu.
+
+### Rule chung
+
+**Thêm `@Cron` mới ở `apps/api` thì dòng đầu thân hàm phải là chốt này.** Quên là cron chạy hai lần, và triệu chứng (ghi đúp, gửi đúp, tốn đúp) rất khó lần ra vì log hai lần trông y hệt nhau, chỉ lệch nhau một giây.
+
+Cron nạp từ DB (`CronjobRunnerService`) chặn ở `onModuleInit` vì nó đăng ký trong `setTimeout` 2 giây — sau mọi bước dọn dẹp ở bootstrap.
+
 ## Khi nào update file này
 
 - Phát hiện bug pattern cross-cutting (ảnh hưởng > 1 module).
