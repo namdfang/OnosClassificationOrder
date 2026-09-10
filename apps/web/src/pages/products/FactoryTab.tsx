@@ -88,7 +88,7 @@ export function FactoryTab() {
   const { t } = useTranslation(['products', 'common']);
   const { confirm, confirmDialog } = useConfirm();
   // AUTH-6 - vai chi doc (Support) xem duoc, khong tao/sua/xoa duoc.
-  const { canWriteProducts } = useProductWriteAccess();
+  const { canManageProducts } = useProductWriteAccess();
   const [factories, setFactories] = useState<ListItem[]>([]);
   const [machineTypes, setMachineTypes] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -308,7 +308,7 @@ export function FactoryTab() {
           <h3 className="text-sm font-semibold text-foreground">{title}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
         </div>
-        {canWriteProducts && (
+        {canManageProducts && (
           <Button size="sm" onClick={() => openCreate(type)}>
             <Plus size={14} />
             {t('common:actions.add')}
@@ -368,7 +368,7 @@ export function FactoryTab() {
                   )}
                 </TableCell>
                 <TableCell>
-                  {canWriteProducts && (
+                  {canManageProducts && (
                     <Button variant="ghost" size="sm" onClick={() => openEdit(type, it)}>
                       {t('common:actions.edit')}
                     </Button>
@@ -393,7 +393,7 @@ export function FactoryTab() {
             <h3 className="text-sm font-semibold text-foreground">{t('factoryTab.fabric.title')}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">{t('factoryTab.fabric.description')}</p>
           </div>
-          {canWriteProducts && (
+          {canManageProducts && (
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
@@ -454,7 +454,7 @@ export function FactoryTab() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    {canWriteProducts && (
+                    {canManageProducts && (
                       <>
                         <Button variant="ghost" size="sm" onClick={() => openFabricEdit(it)}>
                           <Pencil size={14} />

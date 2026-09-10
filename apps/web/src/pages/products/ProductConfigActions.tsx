@@ -17,6 +17,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 import { handleAxiosError } from '@/utils';
 
+import { useProductWriteAccess } from '@/hooks/useProductWriteAccess';
+
 import { ImportFullProductFileDialog } from './ImportFullProductFileDialog';
 import { ImportProductConfigDialog } from './ImportProductConfigDialog';
 import { UploadConfigFileDialog } from './UploadConfigFileDialog';
@@ -68,6 +70,8 @@ export function ProductConfigActions({ onChanged }: ProductConfigActionsProps) {
   const { t } = useTranslation('products');
   const { confirm, confirmDialog } = useConfirm();
   const navigate = useNavigate();
+  // Support chỉ được nút "Thêm sản phẩm" — 6 nút import/crawl/backfill vẫn Admin+Manager.
+  const { canManageProducts } = useProductWriteAccess();
   const loadConfig = useWorkshopConfigStore((s) => s.load);
 
   const [importOpen, setImportOpen] = useState(false);
@@ -183,43 +187,47 @@ export function ProductConfigActions({ onChanged }: ProductConfigActionsProps) {
             onClick={() => navigate(PATHS.PRODUCT_DETAIL.replace(':id', 'new'))}
             variant="default"
           />
-          <GroupDivider />
-          {/* Ba nút nạp từ FILE — icon phải phân biệt được, đừng dùng chung một icon. */}
-          <ActionButton
-            label={t('configTab.importButton')}
-            icon={<FileSpreadsheet size={16} />}
-            onClick={() => setImportOpen(true)}
-          />
-          <ActionButton
-            label={t('configTab.uploadButton')}
-            icon={<Upload size={16} />}
-            onClick={() => setUploadOpen(true)}
-          />
-          <ActionButton
-            label={t('configTab.importFullButton')}
-            icon={<PackagePlus size={16} />}
-            onClick={() => setImportFullOpen(true)}
-          />
-          <GroupDivider />
-          {/* Hai nút gọi OnosPod (tích hợp ngoài) — chạy dài, có tiến trình. */}
-          <ActionButton
-            label={t('configTab.onospodImport.button')}
-            icon={onospodImporting ? <Spinner size={16} /> : <CloudDownload size={16} />}
-            onClick={handleImportFromOnospod}
-            disabled={onospodImporting}
-          />
-          <ActionButton
-            label={t('configTab.pageInfoCrawl.button')}
-            icon={pageInfoCrawling ? <Spinner size={16} /> : <Receipt size={16} />}
-            onClick={handleCrawlPageInfo}
-            disabled={pageInfoCrawling}
-          />
-          <GroupDivider />
-          <ActionButton
-            label={t('configTab.backfill.button')}
-            icon={<RotateCw size={16} />}
-            onClick={handleBackfill}
-          />
+          {canManageProducts && (
+            <>
+              <GroupDivider />
+              {/* Ba nút nạp từ FILE — icon phải phân biệt được, đừng dùng chung một icon. */}
+              <ActionButton
+                label={t('configTab.importButton')}
+                icon={<FileSpreadsheet size={16} />}
+                onClick={() => setImportOpen(true)}
+              />
+              <ActionButton
+                label={t('configTab.uploadButton')}
+                icon={<Upload size={16} />}
+                onClick={() => setUploadOpen(true)}
+              />
+              <ActionButton
+                label={t('configTab.importFullButton')}
+                icon={<PackagePlus size={16} />}
+                onClick={() => setImportFullOpen(true)}
+              />
+              <GroupDivider />
+              {/* Hai nút gọi OnosPod (tích hợp ngoài) — chạy dài, có tiến trình. */}
+              <ActionButton
+                label={t('configTab.onospodImport.button')}
+                icon={onospodImporting ? <Spinner size={16} /> : <CloudDownload size={16} />}
+                onClick={handleImportFromOnospod}
+                disabled={onospodImporting}
+              />
+              <ActionButton
+                label={t('configTab.pageInfoCrawl.button')}
+                icon={pageInfoCrawling ? <Spinner size={16} /> : <Receipt size={16} />}
+                onClick={handleCrawlPageInfo}
+                disabled={pageInfoCrawling}
+              />
+              <GroupDivider />
+              <ActionButton
+                label={t('configTab.backfill.button')}
+                icon={<RotateCw size={16} />}
+                onClick={handleBackfill}
+              />
+            </>
+          )}
         </div>
         {running && (
           <span className="text-xs text-muted-foreground">
