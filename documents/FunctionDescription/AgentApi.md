@@ -244,8 +244,13 @@ không lẫn agent với người thật.
 
 `conversationId` do agent truyền **phải thuộc nhóm đã duyệt**; nếu không thì chỉ
 cần biết một id hội thoại bất kỳ là nhắn được vào nhóm khách, và chốt phân loại
-nhóm thành vô nghĩa. Bỏ trống thì lấy hội thoại đầu — mỗi nick trong nhóm có một
-hội thoại riêng, gửi bằng nick nào cũng vào đúng nhóm đó.
+nhóm thành vô nghĩa. Bỏ trống thì **thử lần lượt mọi hội thoại của nhóm** — mỗi nick
+trong nhóm có một hội thoại riêng, gửi bằng nick nào cũng vào đúng nhóm đó, mà nick
+rớt kết nối là chuyện thường. Lần chạy thật đầu tiên trên prod trúng ngay ca này:
+engine trả `account_not_connected` vì nick giữ hội thoại đầu đang chờ quét lại QR,
+trong khi nick thứ hai của nhóm vẫn sống. Chỉ đi tiếp khi thân lỗi đúng là
+`account_not_connected` (`nickRotKetNoi`) — đó là lỗi **trước** lúc gửi; thử lại mù
+trên lỗi khác thì có nguy cơ tin đã đi rồi mà nhắn thêm lần nữa.
 
 Nội dung quá `4000` ký tự bị **cắt** chứ không từ chối: tin quá dài thường là agent
 dán nhầm cả báo cáo, gửi được phần đầu vẫn hơn im lặng.

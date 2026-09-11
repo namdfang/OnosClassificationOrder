@@ -34,7 +34,9 @@ Trả về:
 `groupGlobalId` lấy từ `GET /v1/agent/seller-support`, hoặc đọc thẳng bảng
 `zalo_group_links`. **Không cần** truyền `conversationId`: mỗi nick công ty ở
 trong nhóm có một hội thoại riêng, gửi bằng nick nào cũng vào đúng nhóm đó, nên
-bỏ trống là hệ thống tự chọn. Nếu truyền thì id đó **phải thuộc chính nhóm ấy** —
+bỏ trống là hệ thống **thử lần lượt từng nick** cho tới khi có nick gửi được —
+nick Zalo rớt kết nối (bị đá, chờ quét lại QR) là chuyện thường, bỏ trống thì bạn
+được hưởng phần thử lại đó. Nếu truyền thì id đó **phải thuộc chính nhóm ấy** —
 truyền id lạc sẽ bị từ chối, vì nếu không thì chỉ cần biết một id hội thoại bất
 kỳ là nhắn được vào nhóm khách, và toàn bộ chốt chặn dưới đây thành vô nghĩa.
 
@@ -67,6 +69,7 @@ Tất cả là `400` kèm `message` tiếng Việt đọc thẳng được:
 | `CẤM gửi vào nhóm khách hàng — …` | Nhóm `seller` |
 | `Nhóm chưa được phân loại — …` | Nhóm `unreviewed` |
 | `Nhóm chưa có hội thoại nào để gửi …` | Chưa nick nào của công ty ở trong nhóm |
+| `Mọi nick … đều đang mất kết nối Zalo.` | Có nick trong nhóm nhưng nick nào cũng rớt — báo người vận hành quét lại QR |
 | `conversationId không thuộc nhóm này.` | Id lạc |
 | `Nội dung rỗng.` | `content` trống hoặc chỉ có khoảng trắng |
 

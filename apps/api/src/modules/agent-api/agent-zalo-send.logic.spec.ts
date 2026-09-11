@@ -1,6 +1,6 @@
 import { ZaloGroupKind } from 'shared';
 
-import { chonHoiThoai, kiemNoiDung, LY_DO_CHAN } from './agent-zalo-send.logic';
+import { chonHoiThoai, kiemNoiDung, LY_DO_CHAN, nickRotKetNoi } from './agent-zalo-send.logic';
 
 /**
  * Đây là chốt chặn duy nhất giữa một agent và khách hàng của công ty. Mọi
@@ -21,8 +21,9 @@ describe('chonHoiThoai — ai được nhận tin từ agent', () => {
   });
 
   it('cho nhóm nội bộ và nhóm vận hành', () => {
-    expect(chonHoiThoai({ kind: ZaloGroupKind.Internal, conversationIds: ds })).toEqual({ ok: true, conversationId: 'c1' });
-    expect(chonHoiThoai({ kind: ZaloGroupKind.Operation, conversationIds: ds })).toEqual({ ok: true, conversationId: 'c1' });
+    // Trả CẢ danh sách: nick đầu có thể đang rớt kết nối, bên gọi thử tiếp nick sau.
+    expect(chonHoiThoai({ kind: ZaloGroupKind.Internal, conversationIds: ds })).toEqual({ ok: true, ungVien: ['c1', 'c2'] });
+    expect(chonHoiThoai({ kind: ZaloGroupKind.Operation, conversationIds: ds })).toEqual({ ok: true, ungVien: ['c1', 'c2'] });
   });
 
   it('conversationId phải THUỘC nhóm đã duyệt', () => {
@@ -30,6 +31,9 @@ describe('chonHoiThoai — ai được nhận tin từ agent', () => {
     // nhắn được vào nhóm khách.
     const r = chonHoiThoai({ kind: ZaloGroupKind.Internal, conversationIds: ds }, 'id-cua-nhom-khac');
     expect(r).toEqual({ ok: false, lyDo: LY_DO_CHAN.hoiThoaiLac });
+
+    // Chỉ định hợp lệ thì KHÔNG mở rộng sang nick khác — agent đang cố ý chọn nick.
+    expect(chonHoiThoai({ kind: ZaloGroupKind.Internal, conversationIds: ds }, 'c2')).toEqual({ ok: true, ungVien: ['c2'] });
   });
 
   it('nhóm không tồn tại hoặc chưa có hội thoại → từ chối kèm lý do rõ', () => {
@@ -58,5 +62,16 @@ describe('kiemNoiDung', () => {
 
   it('giữ nguyên tin bình thường, bỏ khoảng trắng thừa', () => {
     expect(kiemNoiDung('  chào nhóm  ')).toEqual({ ok: true, content: 'chào nhóm' });
+  });
+});
+
+describe('nickRotKetNoi — khi nào được thử nick tiếp theo', () => {
+  it('nhận ra lỗi TRƯỚC lúc gửi', () => {
+    expect(nickRotKetNoi('{"error":"account_not_connected","message":"Tài khoản Zalo chưa kết nối"}')).toBe(true);
+  });
+
+  it('KHÔNG thử lại với lỗi khác — tin có thể đã đi rồi mới hỏng, thử tiếp là nhắn hai lần', () => {
+    expect(nickRotKetNoi('{"error":"internal_error"}')).toBe(false);
+    expect(nickRotKetNoi('')).toBe(false);
   });
 });

@@ -35,10 +35,16 @@ export interface NhomDeGui {
   title?: string;
 }
 
-export type KetQuaChon = { ok: true; conversationId: string } | { ok: false; lyDo: string };
+export type KetQuaChon = { ok: true; ungVien: string[] } | { ok: false; lyDo: string };
 
 /**
- * Quyết định gửi vào hội thoại nào, hoặc từ chối kèm lý do đọc được.
+ * Quyết định được gửi vào những hội thoại nào, hoặc từ chối kèm lý do đọc được.
+ *
+ * Trả về **danh sách** chứ không một id: một nhóm có nhiều nick công ty ở trong,
+ * mỗi nick một hội thoại, và nick có thể mất kết nối bất cứ lúc nào (bị Zalo đá,
+ * chờ quét lại QR). Chọn cứng hội thoại đầu thì nhóm chết chỉ vì nick đầu đang
+ * rớt, trong khi nick thứ hai vẫn gửi được — đã gặp thật ở lần chạy đầu trên
+ * prod, engine trả `account_not_connected`. Bên gọi thử lần lượt.
  *
  * `conversationId` do agent truyền vẫn phải THUỘC nhóm đã duyệt — nếu không thì
  * chốt phân loại nhóm vô nghĩa: chỉ cần biết một id hội thoại bất kỳ là nhắn
@@ -52,13 +58,12 @@ export function chonHoiThoai(nhom: NhomDeGui | null, conversationId?: string): K
   const ds = nhom.conversationIds ?? [];
   if (ds.length === 0) return { ok: false, lyDo: LY_DO_CHAN.khongCoHoiThoai };
 
+  // Agent chỉ định thì tôn trọng: nó có thể đang muốn gửi bằng đúng nick nào đó.
   if (conversationId) {
-    return ds.includes(conversationId) ? { ok: true, conversationId } : { ok: false, lyDo: LY_DO_CHAN.hoiThoaiLac };
+    return ds.includes(conversationId) ? { ok: true, ungVien: [conversationId] } : { ok: false, lyDo: LY_DO_CHAN.hoiThoaiLac };
   }
 
-  // Không chỉ định thì lấy hội thoại đầu — mỗi nick trong nhóm có một hội thoại
-  // riêng, gửi bằng nick nào cũng vào đúng nhóm đó.
-  return { ok: true, conversationId: ds[0] };
+  return { ok: true, ungVien: [...ds] };
 }
 
 /** Cắt và kiểm nội dung trước khi gửi. */
@@ -69,4 +74,16 @@ export function kiemNoiDung(content: string | undefined, tranKyTu = 4000): { ok:
   // Cắt thay vì từ chối: tin quá dài thường là agent dán nhầm cả báo cáo, cắt
   // vẫn gửi được phần đầu còn hơn im lặng không gửi gì.
   return { ok: true, content: c.length > tranKyTu ? `${c.slice(0, tranKyTu - 1)}…` : c };
+}
+
+/**
+ * Engine từ chối vì nick giữ hội thoại đó đang rớt — bên gọi nên thử nick khác
+ * trong cùng nhóm.
+ *
+ * Nhận diện bằng mã lỗi trong thân trả về chứ không bằng mã HTTP: 503 của engine
+ * gộp nhiều nguyên nhân, và thử lại mù trên một lỗi *sau khi đã gửi* thì có nguy
+ * cơ nhắn hai lần. `account_not_connected` là lỗi TRƯỚC khi gửi nên thử tiếp an toàn.
+ */
+export function nickRotKetNoi(thanLoi: string): boolean {
+  return thanLoi.includes('account_not_connected');
 }

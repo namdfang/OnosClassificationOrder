@@ -6,7 +6,7 @@ import { Connection } from 'mongoose';
 
 import { ApiConfigService } from '@/shared/services/api-config.service';
 
-import { chonHoiThoai, kiemNoiDung, type NhomDeGui } from './agent-zalo-send.logic';
+import { chonHoiThoai, kiemNoiDung, type NhomDeGui, nickRotKetNoi } from './agent-zalo-send.logic';
 
 /** Engine từ chối token quá cũ; 15 giây là dư cho một lời gọi nội bộ. */
 const HAN_GIAY = 15;
@@ -49,38 +49,50 @@ export class AgentZaloSendService {
     const chon = chonHoiThoai(nhom, conversationId);
     if (!chon.ok) throw new BadRequestException(chon.lyDo);
 
-    const ts = String(Date.now());
-    const sig = createHmac('sha256', secret).update(ts).digest('base64url');
+    // Thử lần lượt các nick trong nhóm. Nick Zalo rớt kết nối là chuyện thường
+    // (bị đá, chờ quét lại QR) và nhóm nào cũng có vài nick — dừng ở nick đầu
+    // thì nhóm coi như câm dù vẫn còn đường gửi.
+    let loiCuoi = '';
+    for (const hoiThoai of chon.ungVien) {
+      const ts = String(Date.now());
+      const sig = createHmac('sha256', secret).update(ts).digest('base64url');
 
-    let res: Response;
-    try {
-      res = await fetch(`${url}/api/zalo-multi/conversations/${encodeURIComponent(chon.conversationId)}/messages`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-service-token': `${ts}.${sig}`,
-          // Engine đòi ngữ cảnh người dùng; agent gửi NHÂN DANH HỆ THỐNG nên
-          // ghi rõ là `agent` để nhật ký bên engine không lẫn với người thật.
-          'x-user-id': 'agent-api',
-          'x-user-name': 'Agent',
-          'x-user-role': 'owner',
-          'x-user-scopes': '[]',
-        },
-        body: JSON.stringify({ content: noiDung.content }),
-        signal: AbortSignal.timeout(HAN_GIAY * 1000),
-      });
-    } catch (e) {
-      throw new ServiceUnavailableException(`Không gọi được engine Zalo: ${e instanceof Error ? e.message : String(e)}`);
-    }
+      let res: Response;
+      try {
+        res = await fetch(`${url}/api/zalo-multi/conversations/${encodeURIComponent(hoiThoai)}/messages`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-service-token': `${ts}.${sig}`,
+            // Engine đòi ngữ cảnh người dùng; agent gửi NHÂN DANH HỆ THỐNG nên
+            // ghi rõ là `agent` để nhật ký bên engine không lẫn với người thật.
+            'x-user-id': 'agent-api',
+            'x-user-name': 'Agent',
+            'x-user-role': 'owner',
+            'x-user-scopes': '[]',
+          },
+          body: JSON.stringify({ content: noiDung.content }),
+          signal: AbortSignal.timeout(HAN_GIAY * 1000),
+        });
+      } catch (e) {
+        throw new ServiceUnavailableException(`Không gọi được engine Zalo: ${e instanceof Error ? e.message : String(e)}`);
+      }
 
-    if (!res.ok) {
+      if (res.ok) return { conversationId: hoiThoai, groupTitle: nhom?.title, sentAt: new Date().toISOString() };
+
       // Nguyên văn lỗi engine chỉ vào log; agent nhận câu chung để không lộ
       // đường dẫn/nội bộ ra ngoài.
       const raw = await res.text().catch(() => '');
-      this.logger.error(`[agent-zalo-send] engine trả ${res.status}: ${raw.slice(0, 300)}`);
-      throw new ServiceUnavailableException(`Engine Zalo từ chối (${res.status}).`);
+      this.logger.error(`[agent-zalo-send] engine trả ${res.status} ở hội thoại ${hoiThoai}: ${raw.slice(0, 300)}`);
+      loiCuoi = `Engine Zalo từ chối (${res.status}).`;
+
+      // Chỉ đi tiếp khi lỗi xảy ra TRƯỚC lúc gửi. Lỗi khác có thể là tin đã đi
+      // rồi mới hỏng, thử nick tiếp theo sẽ thành nhắn hai lần.
+      if (!nickRotKetNoi(raw)) throw new ServiceUnavailableException(loiCuoi);
     }
 
-    return { conversationId: chon.conversationId, groupTitle: nhom?.title, sentAt: new Date().toISOString() };
+    throw new ServiceUnavailableException(
+      chon.ungVien.length > 1 ? 'Mọi nick của công ty trong nhóm này đều đang mất kết nối Zalo.' : loiCuoi || 'Engine Zalo từ chối.',
+    );
   }
 }
