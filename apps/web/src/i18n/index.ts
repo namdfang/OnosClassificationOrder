@@ -19,6 +19,7 @@ import designerTaskWorkflowEn from './locales/en/designerTaskWorkflow.json';
 import fulfillmentWorkflowEn from './locales/en/fulfillmentWorkflow.json';
 import landingEn from './locales/en/landing.json';
 import layoutEn from './locales/en/layout.json';
+import orderGuideEn from './locales/en/orderGuide.json';
 import orderLifecycleEn from './locales/en/orderLifecycle.json';
 import orderLogEn from './locales/en/orderLog.json';
 import ordersEn from './locales/en/orders.json';
@@ -51,6 +52,7 @@ import designerTaskWorkflowVi from './locales/vi/designerTaskWorkflow.json';
 import fulfillmentWorkflowVi from './locales/vi/fulfillmentWorkflow.json';
 import landingVi from './locales/vi/landing.json';
 import layoutVi from './locales/vi/layout.json';
+import orderGuideVi from './locales/vi/orderGuide.json';
 import orderLifecycleVi from './locales/vi/orderLifecycle.json';
 import orderLogVi from './locales/vi/orderLog.json';
 import ordersVi from './locales/vi/orders.json';
@@ -118,6 +120,7 @@ export const resources = {
     careers: careersVi,
     catalog: catalogVi,
     track: trackVi,
+    orderGuide: orderGuideVi,
     agentApi: agentApiVi,
     ceoDashboard: ceoDashboardVi,
     apiDocs: apiDocsVi,
@@ -152,6 +155,7 @@ export const resources = {
     careers: careersEn,
     catalog: catalogEn,
     track: trackEn,
+    orderGuide: orderGuideEn,
     agentApi: agentApiEn,
     ceoDashboard: ceoDashboardEn,
     apiDocs: apiDocsEn,

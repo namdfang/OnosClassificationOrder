@@ -83,6 +83,10 @@ export const PATHS = {
   // danh sách trắng hẹp — xem `public-track.service.ts`.
   TRACK: '/track',
   TRACK_DETAIL: '/track/:productionId',
+  // Hướng dẫn khách lên đơn từng bước, ảnh chụp thật Seller Portal — xem OrderGuide.md.
+  // KHÔNG dùng '/guide/order': trùng thư mục ảnh public/guide/order/ → Vite dev trả 500 và
+  // nginx try_files khớp thư mục trước index.html (OrderGuide.md §6.1).
+  ORDER_GUIDE: '/guide/ordering',
 
   ERROR_403: '/forbidden',
   ERROR_404: '/error/404',
