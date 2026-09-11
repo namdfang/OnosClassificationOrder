@@ -5,6 +5,7 @@ import { Maximize2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 import { badgeDiameter, badgeOffsetPx, layoutBadges, shotMinWidth } from './badgeLayout';
+import type { HighlightSource } from './CalloutList';
 import type { GuideStep } from './guideSteps';
 import { GUIDE_IMAGE_BASE } from './guideSteps';
 
@@ -13,7 +14,7 @@ interface AnnotatedShotProps {
   alt: string;
   labelOf: (n: number) => string;
   active: number | null;
-  onActiveChange: (n: number | null) => void;
+  onActiveChange: (n: number | null, source: HighlightSource) => void;
   /**
    * Có → hiện nút "Phóng to"; bấm ảnh hoặc huy hiệu số sẽ mở ảnh phóng to. `returnFocus` là phần
    * tử nhận lại focus khi đóng hộp phóng to (Radix không có Trigger nên tự trả về BODY).
@@ -68,8 +69,11 @@ function AnnotatedShot({
   const diameter = badgeDiameter(Math.min(1, renderWidth / width));
   const hasLeader = step.callouts.some((c) => badges[c.n]?.leader);
   const swipeable = !isZoom && minWidth > 326;
+  // Hộp phóng to: ảnh gốc RỘNG HƠN màn hình giữ tối thiểu `minWidth` (≤ 960) và cuộn ngang như cũ; ảnh gốc HẸP HƠN
+  // hoặc bằng màn hình thì thu vừa khung, không cuộn ngang (TEST-04 BUG-5: ảnh 380px nằm trong khung 340px ở 390).
+  // `clamp(0px, (W − 100vw) × 9999, minWidth)` = 0 khi W ≤ 100vw, = minWidth khi W > 100vw — thuần CSS, tự đổi khi xoay/kéo cửa sổ.
   const innerStyle: React.CSSProperties = isZoom
-    ? { width: `max(min(${width}px, 100%), ${minWidth}px)` }
+    ? { width: `max(min(${width}px, 100%), clamp(0px, calc((${width}px - 100vw) * 9999), ${minWidth}px))` }
     : { maxWidth: `${width}px`, minWidth: `${minWidth}px` };
 
   const image = (
@@ -195,11 +199,11 @@ function AnnotatedShot({
                   type="button"
                   data-callout={c.n}
                   aria-label={t('shot.marker', { n: c.n, label: labelOf(c.n) })}
-                  onMouseEnter={() => onActiveChange(c.n)}
-                  onMouseLeave={() => onActiveChange(null)}
-                  onFocus={() => onActiveChange(c.n)}
-                  onBlur={() => onActiveChange(null)}
-                  onClick={(e) => (onZoom ? onZoom(c.n, e.currentTarget) : onActiveChange(c.n))}
+                  onMouseMove={() => onActiveChange(c.n, 'hover')}
+                  onMouseLeave={() => onActiveChange(null, 'hover')}
+                  onFocus={() => onActiveChange(c.n, 'focus')}
+                  onBlur={() => onActiveChange(null, 'focus')}
+                  onClick={(e) => (onZoom ? onZoom(c.n, e.currentTarget) : onActiveChange(c.n, 'pin'))}
                   data-slot={pos.slot}
                   style={{
                     left: `calc(${pos.ax}% + ${badgeOffsetPx(pos.kx, pos.gx, diameter)}px)`,

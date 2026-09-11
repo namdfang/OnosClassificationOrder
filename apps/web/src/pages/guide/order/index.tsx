@@ -55,6 +55,8 @@ function OrderGuidePage() {
   /** Đang nhảy tới mục vừa bấm → bỏ qua tính theo vị trí cuộn cho tới khi cuộn xong. */
   const lockedRef = useRef(false);
   const lockTimerRef = useRef<number | undefined>(undefined);
+  /** Khung cuộn ngang của thanh chuyển luồng (điện thoại không đủ chỗ cho cả 4 mục). */
+  const navScrollerRef = useRef<HTMLDivElement>(null);
 
   const syncNavFromScroll = useCallback(() => {
     const line = window.innerHeight * NAV_LINE_RATIO;
@@ -111,6 +113,25 @@ function OrderGuidePage() {
       window.clearTimeout(lockTimerRef.current);
     };
   }, [releaseLockAfter, syncNavFromScroll]);
+
+  // Mục sáng đổi (do cuộn hoặc do bấm) → cuộn NGANG thanh luồng để mục đó lọt hết vào khung (TEST-04 BUG-2: ở 360/390
+  // "3 Import file" nằm ngoài khung, scrollLeft vẫn 0). Chỉ đặt scrollLeft của chính thanh — `scrollIntoView` trên
+  // phần tử trong thanh `sticky` có thể kéo cả trang cuộn dọc.
+  useEffect(() => {
+    const scroller = navScrollerRef.current;
+    const link = scroller?.querySelector<HTMLElement>(`[data-nav-id="${activeNav}"]`);
+    if (!scroller || !link || scroller.scrollWidth <= scroller.clientWidth) return;
+    const s = scroller.getBoundingClientRect();
+    const l = link.getBoundingClientRect();
+    // Lề = padding `px-4` của thanh → mục đầu/cuối vẫn cách mép khung như lúc chưa cuộn.
+    const pad = 16;
+    let delta = 0;
+    if (l.left < s.left + pad) delta = l.left - s.left - pad;
+    else if (l.right > s.right - pad) delta = l.right - s.right + pad;
+    if (Math.abs(delta) < 1) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    scroller.scrollTo({ left: scroller.scrollLeft + delta, behavior: reduceMotion ? 'auto' : 'smooth' });
+  }, [activeNav]);
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
@@ -196,12 +217,16 @@ function OrderGuidePage() {
           aria-label={t('nav.label')}
           className="sticky top-16 z-40 border-y border-slate-200 bg-white/95 backdrop-blur lg:top-20"
         >
-          <div className="mx-auto flex max-w-6xl gap-1.5 overflow-x-auto px-4 py-2.5 [scrollbar-width:none]">
+          <div
+            ref={navScrollerRef}
+            className="mx-auto flex max-w-6xl gap-1.5 overflow-x-auto px-4 py-2.5 [scrollbar-width:none]"
+          >
             {NAV_IDS.map((id, index) => {
               const isActive = activeNav === id;
               return (
                 <a
                   key={id}
+                  data-nav-id={id}
                   href={`#${sectionId(id)}`}
                   onClick={() => jumpTo(id)}
                   aria-current={isActive ? 'location' : undefined}

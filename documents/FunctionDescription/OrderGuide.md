@@ -28,7 +28,7 @@ Trang public hướng dẫn **khách hàng lên đơn trên Seller Portal (`apps
 ```
 PublicHeader (sticky h-16 / lg:h-20)
 ├── Hero — tiêu đề + mô tả + CTA + ghi chú ảnh + 3 thẻ nhảy tới 3 luồng
-├── Thanh chuyển luồng (sticky top-16 / lg:top-20, scrollspy IntersectionObserver)
+├── Thanh chuyển luồng (sticky top-16 / lg:top-20, mục sáng tính theo vị trí cuộn — §4.3)
 ├── #flow-form    Luồng 1 — Tạo đơn trên form (7 bước)
 ├── #flow-push    Luồng 2 — Đẩy sản xuất và theo dõi (5 bước)
 ├── #flow-import  Luồng 3 — Import đơn từ file CSV (5 bước)
@@ -110,12 +110,12 @@ cho trang tĩnh. Trước đây chép tay số từ manifest sang `guideSteps.ts
 
 | File | Vai trò |
 | --- | --- |
-| `index.tsx` | Trang: hero, thanh chuyển luồng dính (tính theo vị trí cuộn + khoá khi bấm, §4.3), 3 section luồng, FAQ, CTA cuối. `FAQ_KEYS` là danh sách câu hỏi. `TRACK_LINK` quyết định nút tra cứu (§4.6). |
-| `GuideStepBlock.tsx` | 1 bước: số bước + tiêu đề + mô tả + ô lưu ý + ảnh + danh sách chú thích + hộp phóng to. Giữ state `active` dùng chung cho huy hiệu/viền ↔ chú thích và `returnFocusRef` cho hộp phóng to. |
+| `index.tsx` | Trang: hero, thanh chuyển luồng dính (tính theo vị trí cuộn + khoá khi bấm + tự cuộn ngang tới mục sáng, §4.3), 3 section luồng, FAQ, CTA cuối. `FAQ_KEYS` là danh sách câu hỏi. `TRACK_LINK` quyết định nút tra cứu (§4.6). |
+| `GuideStepBlock.tsx` | 1 bước: số bước + tiêu đề + mô tả + ô lưu ý + ảnh + danh sách chú thích + hộp phóng to. Hook nội bộ `useCalloutHighlight` (1 bản cho trong bài, 1 bản cho hộp phóng to) giữ chú thích đang sáng dùng chung cho huy hiệu/viền ↔ chú thích (§4.3); `zoomFrom` = huy hiệu đã mở hộp; `returnFocusRef` cho hộp phóng to. |
 | `AnnotatedShot.tsx` | Khung ảnh kiểu cửa sổ trình duyệt nhẹ, `<img width height>` thật, VIỀN (`boxPct`) + HUY HIỆU (`layoutBadges`, `left/top: calc(% + px)`, `data-slot`) + đường dẫn SVG (`data-callout-leader`), nút "Phóng to". Đo bề rộng ảnh đang vẽ bằng `ResizeObserver` — CHỈ để tính cỡ huy hiệu. Biến thể `inline` / `zoom`. |
 | `badgeLayout.ts` | `isWideShot`, `shotMinWidth`, `badgeDiameter(scale)`, `badgeOffsetPx`, `layoutBadges(step)` (không nhận bề rộng, cache theo ảnh) — hàm thuần, không React. |
-| `CalloutList.tsx` | `<ol>` chú thích; mỗi mục là `<button>` (hover/focus → sáng viền + huy hiệu; click → cuộn huy hiệu vào tầm nhìn). Bố cục `stack` (cạnh ảnh hẹp) hoặc `grid` (dưới ảnh rộng). |
-| `ShotLightbox.tsx` | Hộp phóng to Radix Dialog dùng thẳng `@radix-ui/react-dialog` (bản `components/ui/dialog` có nút "Close" chữ cứng + khung `max-w-lg`). Esc đóng, khoá focus, `onCloseAutoFocus` trả focus về phần tử đã mở. Viền/huy hiệu và chú thích đồng bộ y như ngoài bài. |
+| `CalloutList.tsx` | `<ol>` chú thích; mỗi mục là `<button>` (rê chuột/focus → sáng viền + huy hiệu; click → cuộn huy hiệu vào tầm nhìn). Bố cục `stack` (cạnh ảnh hẹp) hoặc `grid` (dưới ảnh rộng). Export type `HighlightSource` (`hover`/`focus`/`pin`) — tham số thứ 2 của mọi `onActiveChange`. |
+| `ShotLightbox.tsx` | Hộp phóng to Radix Dialog dùng thẳng `@radix-ui/react-dialog` (bản `components/ui/dialog` có nút "Close" chữ cứng + khung `max-w-lg`). Esc đóng, khoá focus, `onCloseAutoFocus` trả focus về phần tử đã mở; `onOpenAutoFocus` cuộn tới huy hiệu đã mở hộp (`revealOnOpen`, §4.3). Viền/huy hiệu và chú thích đồng bộ y như ngoài bài. |
 | `scrollMarker.ts` | `scrollMarkerIntoView(container, n)` — tách file để component file chỉ export component (fast refresh). |
 | `guideSteps.ts` / `guideTypes.ts` / `guideShots.generated.ts` | Dữ liệu §3. |
 
@@ -162,8 +162,20 @@ cho trang tĩnh. Trước đây chép tay số từ manifest sang `guideSteps.ts
 - **Lưới mực** (`ink`) 12px nên thô: ô chữ bị làm tròn lên ô, % che đo được thường cao hơn phần chữ bị che thật.
 
 **Tương tác:**
-- Hover/focus huy hiệu ↔ mục chú thích sáng tương ứng (cả viền), cả hai chiều; dùng được hoàn toàn bằng bàn phím (Tab qua huy hiệu và mục chú thích).
-- Huy hiệu là `<button>` có `aria-label` "Chú thích n: <nhãn>"; click → mở ảnh phóng to đang sáng đúng chú thích đó.
+- Hover/focus huy hiệu ↔ mục chú thích sáng tương ứng (cả viền), cả hai chiều, ở MỌI khổ và cả trong hộp phóng to; dùng được hoàn toàn bằng bàn phím (Tab qua huy hiệu và mục chú thích — huy hiệu nhận đúng class sáng `scale-110 ring-4 ring-brand-300`, viền nhận quầng).
+- **Chuột và focus giữ state RIÊNG** (`useCalloutHighlight` trong `GuideStepBlock.tsx`, TEST-04 BUG-1): state `{ hover, focus, pin, last }`,
+  chú thích sáng = giá trị của nguồn vừa đổi gần nhất, nguồn đó rỗng thì lùi về hover → focus → pin. Bản cũ dùng chung 1
+  state nên một `mouseleave` bất kỳ xoá luôn chú thích đang focus bằng Tab.
+  - Chuột sáng bằng **`mousemove`**, tắt bằng `mouseleave`. KHÔNG dùng `mouseenter`: nội dung cuộn dưới con trỏ đứng yên
+    (Tab làm hộp phóng to cuộn, hộp tự cuộn tới huy hiệu) chỉ bắn `mouseover/mouseenter`, không bắn `mousemove` (đã đo trên
+    Chrome) → trước đây nó cướp chỗ của mục đang focus.
+  - `pin` = bấm mục chú thích / mở hộp phóng to từ huy hiệu n (hộp mở ra sáng n). Rê chuột hoặc focus VÀO một chú thích
+    thì bỏ ghim; `mouseleave`/`blur` không bỏ ghim. Mỗi lần mở hộp, state của hộp được làm mới (đóng hộp không bắn `mouseleave`).
+  - `mousemove` không đổi gì thì trả lại đúng object state cũ → không render lại.
+- Huy hiệu là `<button>` có `aria-label` "Chú thích n: <nhãn>"; click → mở ảnh phóng to đang sáng đúng chú thích đó và
+  **cuộn tới huy hiệu đó** (TEST-04 BUG-3): `ShotLightbox` `onOpenAutoFocus` → 1 frame sau đặt TỨC THÌ `scrollLeft` của
+  `[data-shot-scroller]` và `scrollTop` của `[data-zoom-body]` để huy hiệu nằm giữa khung — chỉ khi nó đang lọt ra ngoài
+  (lề 12px). Tự đặt scroll thay vì `scrollIntoView` để không đụng trang phía sau. Mở bằng ảnh hoặc nút "Phóng to" → đầu ảnh như cũ.
 - Bấm ảnh → phóng to (ảnh bọc `<button tabIndex=-1>` để khỏi thừa điểm Tab; đường bàn phím là nút "Phóng to" trên thanh cửa sổ).
 - **Trả focus khi đóng hộp phóng to** (Esc / ×): hộp mở bằng state, không qua `Dialog.Trigger`, nên Radix trả focus
   về BODY → `ShotLightbox` `onCloseAutoFocus` trả về: huy hiệu (nếu mở từ huy hiệu), nút "Phóng to" (nếu mở từ nút
@@ -172,7 +184,18 @@ cho trang tĩnh. Trước đây chép tay số từ manifest sang `guideSteps.ts
   cuộn, rAF). Bấm mục (hoặc thẻ luồng ở hero) → sáng NGAY mục đó và khoá tính theo cuộn cho tới khi hết sự kiện
   cuộn 200ms (tối đa 800ms nếu không cuộn) rồi tính lại. Bản IntersectionObserver cũ không bắn khi nhảy neo → mục
   sáng kẹt ở mục cũ (TEST-01 bug 5).
-- Ảnh phóng to: rộng `max(min(width, 100%), min(width, 960px))` → desktop gần full màn, điện thoại cuộn/vuốt được trong khung.
+- **Thanh luồng tự cuộn ngang tới mục sáng** (TEST-04 BUG-2, 360/390 không đủ chỗ cho 4 mục): mỗi khi `activeNav` đổi (do
+  cuộn hoặc do bấm), effect ở `index.tsx` đặt `scrollLeft` của khung thanh (`navScrollerRef`, mục có `data-nav-id`) để mục
+  sáng lọt hết vào khung, cách mép 16px (= `px-4`); `smooth`, `auto` khi `prefers-reduced-motion`. Chỉ cuộn khung thanh —
+  KHÔNG `scrollIntoView` (phần tử trong thanh `sticky` có thể kéo trang cuộn dọc). Thanh không tràn thì không làm gì.
+- Ảnh phóng to: rộng `max(min(W, 100%), clamp(0px, (W − 100vw) × 9999, min(W, 960px)))` (W = bề rộng gốc):
+  - ảnh gốc **rộng hơn màn hình** → tối thiểu `min(W, 960)`, cuộn/vuốt ngang trong khung như cũ;
+  - ảnh gốc **hẹp hơn hoặc bằng màn hình** → thu vừa khung, không cuộn ngang, huy hiệu nằm trọn (TEST-04 BUG-5: `form-06`
+    380px ở 390 từng nằm trong khung 340px, huy hiệu 1 bị cắt). Ở 390: ảnh 348px, mọi huy hiệu trong khung.
+  - Hệ quả theo đúng quy tắc: ở **360** `form-06` (380 > 360) vẫn giữ 380px và cuộn (huy hiệu 1 ở x 343–369 trong khung 318);
+    ở **768** `push-02` (736 ≤ 768) nay thu vừa khung 670px thay vì cuộn.
+  - Thuần CSS (`clamp` với hệ số lớn làm công tắc theo `100vw`) → tự đổi khi xoay/kéo cửa sổ, không cần JS đo màn.
+  - Desktop không đổi: 1280/1440 ảnh rộng vẫn gần full khung.
 - `alt` mô tả từng ảnh qua i18n; ảnh đầu tiên `loading="eager"`, còn lại `lazy` + `decoding="async"`.
 - FAQ dùng `<details>/<summary>` gốc (bàn phím sẵn). Mọi chuyển động có nhánh `motion-reduce:`.
 
@@ -184,7 +207,7 @@ cho trang tĩnh. Trước đây chép tay số từ manifest sang `guideSteps.ts
   `min-width` của ảnh cỡ vừa kéo giãn thành 642px → tiêu đề/mô tả tràn tới x=658.)
 - Bề rộng tối thiểu của ảnh (`shotMinWidth`): ảnh rộng/dẹt `min(width, 600)`; ảnh hẹp > 560px → 560 (vừa cột ảnh
   desktop); ảnh hẹp ≤ 560px → co tới 326. Nhỏ hơn cột → vuốt ngang TRONG khung, có dòng gợi ý "Vuốt ngang…" dưới `sm`.
-- Huy hiệu 20px trên điện thoại (ảnh vẽ ≤ ½ cỡ gốc), vùng bấm 28px (`before:-inset-1`). Thanh chuyển luồng cuộn ngang được, không xuống dòng.
+- Huy hiệu 20px trên điện thoại (ảnh vẽ ≤ ½ cỡ gốc), vùng bấm 28px (`before:-inset-1`). Thanh chuyển luồng cuộn ngang được, không xuống dòng, và tự cuộn tới mục sáng (§4.3).
 - **Thanh chuyển luồng chỉ dính trong khối bao `nav + 3 luồng + FAQ`** (một `<div>` trong `<main>`). Để thẳng trong
   `<main>` thì ở cuối trang nó bị đẩy xuống đáy `<main>` → dải trắng ~58px nằm giữa CTA tối và footer (TEST-02, 390px;
   tái hiện khi mép footer cách đỉnh màn ~100px). Thêm section mới sau FAQ thì đặt NGOÀI khối này.
@@ -280,6 +303,18 @@ Mở `/guide/ordering` ở 360×780, 390×844, 430×932, 757×900, 1440×900 và
 - 390: bấm mục thanh luồng → `aria-current="location"` ngay và sau 1,2s; mở hộp phóng to bằng nút / huy hiệu / click ảnh → đóng bằng Esc / × → `document.activeElement` là đúng nút/huy hiệu;
 - footer: ở trang này href neo là `/#how…`, ở trang chủ là `#how…`.
 
+**Kiểm bàn phím / màn hẹp (sau TEST-04, 11/09/2026)** — 360×780 và 390×844:
+- (a) Tab qua từng mục chú thích của `push-confirm`, `form-files`, `import-result`, `push-detail` (trong bài) và `push-confirm`
+  (hộp phóng to) → đúng 1 huy hiệu sáng (`scale-110 ring-brand-300`) + viền có quầng; chuột rê mục 1 → Tab sang 2 → rời
+  chuột → 2 vẫn sáng; rê mục 3 → sáng 3, rời → về 2;
+- (b) cuộn tới `flow-import`/`faq`/`flow-push`/`flow-form` → mục `aria-current` nằm trọn trong khung thanh, `scrollY` đứng yên;
+  bấm "Import" → sáng ngay + lọt khung;
+- (c) cuộn ảnh rộng trong bài hết sang phải, bấm huy hiệu phía phải (`form-chooseLine` #3, `push-confirm` #4, `import-result` #2,
+  `push-detail` #5, `form-pickProduct` #3) → trong hộp huy hiệu đó nằm trong khung ngang + dọc và đang sáng; Esc trả focus
+  về huy hiệu; mở bằng nút "Phóng to" → `scrollLeft`/`scrollTop` 0;
+- (d) 390: hộp `form-address` `scrollWidth <= clientWidth`, mọi huy hiệu trong khung;
+- (e) không tràn ngang.
+
 **Kiểm huy hiệu (sau TEST-02 B2, 11/09/2026)** — 17 ảnh × 360/390/757/1280/1440 × {trong bài, hộp phóng to}, đo DOM
 thật + lưới mực của ảnh:
 - (a) khoảng cách huy hiệu ↔ viền của chính nó ≤ 4px, hoặc có `[data-callout-leader]`;
@@ -295,7 +330,7 @@ Huy hiệu còn che mực đáng kể (lưới 12px, % thô hơn thực tế):
 | Ảnh / huy hiệu | Slot | Che (đo) | Soát bằng mắt |
 | --- | --- | --- | --- |
 | `form-06` #1 "Địa chỉ" | `corner-tr` | 47% — **FAIL (d)** | Đè góc trên-phải viền, phần ngoài viền nằm trên đuôi TRỐNG của ô "Smith". Lưới mực đánh dấu CẢ hình chữ nhật ô nhập là mực nên % bị thổi phồng; không che chữ nào. Hai lựa chọn khác đều tệ hơn: dính cạnh trên/dưới che ô nhập/nhãn bên cạnh, đường dẫn thì cắt ngang ô "John" |
-| `import-05` #1 "2 tạo mới" | `bottom-edge0` | 23% ở 360/390, 4–16% từ 757 | Chip ở góc trên-trái ảnh 882×140, không có chỗ trống trong 3 đường kính; ở điện thoại huy hiệu chạm mép chữ "D" đầu dòng "DEMO-…-A" |
+| `import-05` #1 "2 tạo mới" | `bottom-edge0` | 23% ở 360/390, 4–16% từ 757 | Chip ở góc trên-trái ảnh 882×140, không có chỗ trống trong 3 đường kính; ở điện thoại huy hiệu chạm mép chữ "D" đầu dòng "DEMO-…-A". **Ngoại lệ đã biết, BA chấp nhận (TEST-04 BUG-4, Cosmetic): huy hiệu che chữ "D" của mã đơn ở Import bước 5, khổ 360/390 — KHÔNG sửa** |
 | `import-02` #3 | `on-bottom-start` | 13–24% | Viền dòng SKU đầu chồng viền tiêu đề cột; huy hiệu đè viền dưới, chạm chữ "U" của dòng SKU kế tiếp |
 | `form-07` #2 | `top-end` | 3–11% | |
 

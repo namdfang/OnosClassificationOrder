@@ -4,10 +4,42 @@ import { Lightbulb } from 'lucide-react';
 
 import AnnotatedShot from './AnnotatedShot';
 import { isWideShot } from './badgeLayout';
+import type { HighlightSource } from './CalloutList';
 import CalloutList from './CalloutList';
 import type { GuideFlowId, GuideStep } from './guideSteps';
 import { scrollMarkerIntoView } from './scrollMarker';
 import ShotLightbox from './ShotLightbox';
+
+interface HighlightState {
+  hover: number | null;
+  focus: number | null;
+  pin: number | null;
+  last: HighlightSource;
+}
+
+const NO_HIGHLIGHT: HighlightState = { hover: null, focus: null, pin: null, last: 'pin' };
+
+/**
+ * Chú thích đang sáng (viền + huy hiệu + mục danh sách) = giá trị của NGUỒN VỪA ĐỔI GẦN NHẤT, nguồn đó rỗng thì
+ * lùi về chuột → focus → ghim. Chuột và focus giữ riêng nên rời chuột không xoá chú thích đang focus bằng Tab
+ * và ngược lại (TEST-04 BUG-1). Rê chuột / focus VÀO một chú thích thì bỏ ghim — giữ hành vi cũ: mở hộp phóng to
+ * từ huy hiệu n sáng n cho tới lần rê chuột / focus đầu tiên; `mouseleave`/`blur` (vd do hộp tự cuộn) không bỏ ghim.
+ */
+function useCalloutHighlight() {
+  const [state, setState] = useState<HighlightState>(NO_HIGHLIGHT);
+  const change = useCallback((n: number | null, source: HighlightSource) => {
+    setState((prev) => {
+      if (source === 'pin') return { ...prev, pin: n, last: 'pin' };
+      // `mousemove` bắn liên tục → không đổi gì thì trả lại đúng object cũ để khỏi render lại.
+      if (prev[source] === n && prev.last === source && (n === null || prev.pin === null)) return prev;
+      return { ...prev, [source]: n, pin: n === null ? prev.pin : null, last: source };
+    });
+  }, []);
+  /** Mở lại hộp phóng to: bỏ trạng thái chuột/focus còn sót của lần mở trước (đóng hộp không bắn mouseleave). */
+  const reset = useCallback((pin: number | null) => setState({ ...NO_HIGHLIGHT, pin }), []);
+  const active = state[state.last] ?? state.hover ?? state.focus ?? state.pin;
+  return { active, change, reset };
+}
 
 interface GuideStepBlockProps {
   flowId: GuideFlowId;
@@ -33,9 +65,11 @@ function GuideStepBlock({ flowId, step, index, total, eager = false, extra }: Gu
   const { t } = useTranslation('orderGuide');
   const rootRef = useRef<HTMLElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  const [active, setActive] = useState<number | null>(null);
+  const { active, change: setActive } = useCalloutHighlight();
   const [zoomOpen, setZoomOpen] = useState(false);
-  const [zoomActive, setZoomActive] = useState<number | null>(null);
+  const { active: zoomActive, change: setZoomActive, reset: resetZoomActive } = useCalloutHighlight();
+  /** Huy hiệu đã mở hộp phóng to (null = mở từ ảnh / nút "Phóng to") — hộp cuộn tới huy hiệu này khi mở. */
+  const [zoomFrom, setZoomFrom] = useState<number | null>(null);
 
   const base = `flows.${flowId}.steps.${step.id}`;
   const title = t(`${base}.title`);
@@ -47,12 +81,13 @@ function GuideStepBlock({ flowId, step, index, total, eager = false, extra }: Gu
 
   const openZoom = (n: number | undefined, returnFocus: HTMLElement | null) => {
     returnFocusRef.current = returnFocus;
-    setZoomActive(n ?? null);
+    resetZoomActive(n ?? null);
+    setZoomFrom(n ?? null);
     setZoomOpen(true);
   };
 
   const selectCallout = (n: number) => {
-    setActive(n);
+    setActive(n, 'pin');
     scrollMarkerIntoView(rootRef.current, n);
   };
 
@@ -135,6 +170,7 @@ function GuideStepBlock({ flowId, step, index, total, eager = false, extra }: Gu
         detailOf={detailOf}
         active={zoomActive}
         onActiveChange={setZoomActive}
+        revealOnOpen={zoomFrom}
         returnFocusRef={returnFocusRef}
       />
     </article>

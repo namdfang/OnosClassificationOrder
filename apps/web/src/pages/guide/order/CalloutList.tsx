@@ -5,12 +5,22 @@ import { cn } from '@/utils/cn';
 
 import type { GuideCallout } from './guideSteps';
 
+/**
+ * Nguồn làm sáng một chú thích. Chuột và focus giữ state RIÊNG (`useCalloutHighlight` ở `GuideStepBlock`) —
+ * dùng chung 1 state thì `mouseleave` (chuột rời mục, hoặc trang cuộn dưới con trỏ khi Tab) xoá mất
+ * chú thích đang được focus bàn phím (TEST-04 BUG-1). `pin` = bấm / mở hộp phóng to từ huy hiệu.
+ *
+ * Chuột sáng bằng `mousemove` chứ KHÔNG `mouseenter`: nội dung cuộn dưới con trỏ đứng yên (Tab trong hộp phóng
+ * to, hộp tự cuộn tới huy hiệu) chỉ bắn `mouseover/mouseenter`, không bắn `mousemove` → không cướp chỗ của focus/ghim.
+ */
+export type HighlightSource = 'hover' | 'focus' | 'pin';
+
 interface CalloutListProps {
   callouts: GuideCallout[];
   labelOf: (n: number) => string;
   detailOf: (n: number) => string;
   active: number | null;
-  onActiveChange: (n: number | null) => void;
+  onActiveChange: (n: number | null, source: HighlightSource) => void;
   /** Bấm 1 mục → cuộn chấm số tương ứng vào tầm nhìn. */
   onSelect: (n: number) => void;
   /** `stack` = cột dọc cạnh ảnh hẹp; `grid` = lưới dưới ảnh rộng. */
@@ -49,10 +59,10 @@ function CalloutList({
           <li key={c.n}>
             <button
               type="button"
-              onMouseEnter={() => onActiveChange(c.n)}
-              onMouseLeave={() => onActiveChange(null)}
-              onFocus={() => onActiveChange(c.n)}
-              onBlur={() => onActiveChange(null)}
+              onMouseMove={() => onActiveChange(c.n, 'hover')}
+              onMouseLeave={() => onActiveChange(null, 'hover')}
+              onFocus={() => onActiveChange(c.n, 'focus')}
+              onBlur={() => onActiveChange(null, 'focus')}
               onClick={() => onSelect(c.n)}
               className={cn(
                 'flex h-full w-full gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
