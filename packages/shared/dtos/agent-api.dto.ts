@@ -450,3 +450,75 @@ export const AgentZaloSendResZod = z.object({
   data: z.object({ conversationId: z.string(), groupTitle: z.string().optional(), sentAt: z.string() }),
 });
 export class AgentZaloSendResDto extends createZodDto(extendApi(AgentZaloSendResZod)) {}
+
+// ---------------------------------------------------------------------------
+// NGHE tin Zalo — đọc tin theo nhóm + hộp thư sự kiện đã lọc.
+// Luật ở `agent-zalo-inbound.logic.ts`: chỉ nhóm nội bộ/vận hành, và chỉ tin do
+// Chủ tịch gửi hoặc tag trúng nick công ty mới thành sự kiện.
+// ---------------------------------------------------------------------------
+
+/** Khoá blob `system_configs` giữ uid Chủ tịch + danh sách bên đăng ký nhận. */
+export const AGENT_ZALO_INBOUND_CONFIG_KEY = 'agent_zalo_inbound_config';
+
+export const AgentZaloSenderZod = z.object({
+  zaloUid: z.string().optional(),
+  displayName: z.string().optional(),
+  /** `chairman` xét trước bảng danh tính; `ai-support` giữ riêng để agent không tự nói với mình. */
+  role: z.enum(['chairman', 'staff', 'ai-support', 'customer', 'unknown']),
+});
+
+export const AgentZaloMentionZod = z.object({
+  uid: z.string().optional(),
+  name: z.string().optional(),
+  /** Có phải nick của công ty không — điều kiện kích hoạt (b). */
+  laNickCongTy: z.boolean(),
+});
+
+export const AgentZaloMessageZod = z.object({
+  messageId: z.string(),
+  zaloMsgId: z.string().optional(),
+  groupGlobalId: z.string(),
+  groupTitle: z.string().optional(),
+  kind: z.string(),
+  conversationId: z.string(),
+  sentAt: z.string(),
+  content: z.string().optional(),
+  contentType: z.string(),
+  attachments: z.array(z.any()).optional(),
+  replyToId: z.string().nullable().optional(),
+  sender: AgentZaloSenderZod,
+  mentions: z.array(AgentZaloMentionZod),
+});
+export type AgentZaloMessage = z.infer<typeof AgentZaloMessageZod>;
+
+export const GetAgentZaloMessagesZod = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  /** Mốc ISO — chỉ lấy tin gửi SAU mốc này. */
+  since: z.string().optional(),
+});
+export class GetAgentZaloMessagesDto extends createZodDto(extendApi(GetAgentZaloMessagesZod)) {}
+
+export class GetAgentZaloMessagesResDto extends createZodDto(
+  extendApi(z.object({ success: z.literal(true), data: z.array(AgentZaloMessageZod), total: z.number() })),
+) {}
+
+/** Một lượt đáng đánh thức agent. */
+export const AgentZaloTriggerZod = z.object({
+  triggerId: z.string(),
+  reason: z.enum(['chairman', 'mention']),
+  receivedAt: z.string(),
+  message: AgentZaloMessageZod,
+});
+export type AgentZaloTrigger = z.infer<typeof AgentZaloTriggerZod>;
+
+export const GetAgentZaloInboxZod = z.object({
+  /** Con trỏ = `triggerId` của lượt cuối đã xử lý. */
+  cursor: z.string().optional(),
+  since: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+export class GetAgentZaloInboxDto extends createZodDto(extendApi(GetAgentZaloInboxZod)) {}
+
+export class GetAgentZaloInboxResDto extends createZodDto(
+  extendApi(z.object({ success: z.literal(true), data: z.array(AgentZaloTriggerZod), total: z.number(), nextCursor: z.string().optional() })),
+) {}

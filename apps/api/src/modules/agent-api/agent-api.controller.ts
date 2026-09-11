@@ -18,7 +18,14 @@ import {
   ReadAgentTableQueryDto,
   ReadAgentTableResDto,
 } from 'shared';
-import { AgentZaloSendDto, type AgentZaloSendResDto } from 'shared';
+import {
+  AgentZaloSendDto,
+  type AgentZaloSendResDto,
+  GetAgentZaloInboxDto,
+  type GetAgentZaloInboxResDto,
+  GetAgentZaloMessagesDto,
+  type GetAgentZaloMessagesResDto,
+} from 'shared';
 import { Logger } from 'winston';
 
 import { Auth } from '@/decorators';
@@ -36,6 +43,8 @@ import { AgentQueryService } from './agent-query.service';
 import { AgentReadService } from './agent-read.service';
 import { AgentSellerSupportService } from './agent-seller-support.service';
 import { AGENT_SWAGGER_DESCRIPTION, agentSummary } from './agent-swagger-guide';
+import { AgentZaloInboundService } from './agent-zalo-inbound.service';
+import { AgentZaloReadService } from './agent-zalo-read.service';
 import { AgentZaloSendService } from './agent-zalo-send.service';
 
 /**
@@ -103,6 +112,8 @@ export class AgentApiController {
     private readonly ceoReports: CeoReportService,
     private readonly customerReports: CustomerReportService,
     private readonly zaloSend: AgentZaloSendService,
+    private readonly zaloRead: AgentZaloReadService,
+    private readonly zaloInbound: AgentZaloInboundService,
     private readonly audit: AgentAuditService,
     @Inject('winston') private readonly logger: Logger,
   ) {}
@@ -355,6 +366,60 @@ export class AgentApiController {
       });
       throw e;
     }
+  }
+
+  /**
+   * ĐỌC tin của một nhóm — nền của cả ba nguồn kích hoạt.
+   *
+   * Cùng chốt loại nhóm với đường gửi: agent không đọc được nhóm khách hàng.
+   * Đọc nhóm khách còn nặng hơn gửi nhầm — gửi nhầm thì người ta thấy và mắng,
+   * còn đọc lén thì không ai biết.
+   */
+  @Get('zalo/groups/:groupGlobalId/messages')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: 'Đọc tin của một nhóm Zalo nội bộ/vận hành' })
+  @HttpCode(HttpStatus.OK)
+  async zaloMessages(
+    @Param('groupGlobalId') groupGlobalId: string,
+    @Query() q: GetAgentZaloMessagesDto,
+  ): Promise<GetAgentZaloMessagesResDto> {
+    const startedAt = Date.now();
+    this.log('GET', `/agent/zalo/groups/${groupGlobalId}/messages`);
+    const data = await this.zaloRead.tinCuaNhom(groupGlobalId, q.limit ?? 50, q.since);
+    this.audit.write({
+      capability: 'zalo_read',
+      queryDigest: { groupGlobalId, limit: q.limit, since: q.since },
+      returned: data.length,
+      durationMs: Date.now() - startedAt,
+      outcome: 'ok',
+    });
+
+    return { success: true, data, total: data.length };
+  }
+
+  /**
+   * Hộp thư sự kiện đã lọc — đường lui khi máy bên nhận sập.
+   *
+   * Cùng một kho với đường đẩy webhook, không phải hai nguồn dữ liệu song song:
+   * hai nguồn thì sớm muộn lệch nhau, và lúc đó không ai biết cái nào đúng.
+   */
+  @Get('zalo/inbox')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: 'Sự kiện Zalo đáng đánh thức agent, từ một con trỏ' })
+  @HttpCode(HttpStatus.OK)
+  async zaloInbox(@Query() q: GetAgentZaloInboxDto): Promise<GetAgentZaloInboxResDto> {
+    const startedAt = Date.now();
+    this.log('GET', '/agent/zalo/inbox');
+    const r = await this.zaloInbound.hopThu(q.cursor, q.since, q.limit ?? 50);
+    this.audit.write({
+      capability: 'zalo_inbox',
+      queryDigest: { cursor: q.cursor, since: q.since },
+      returned: r.total,
+      durationMs: Date.now() - startedAt,
+      outcome: 'ok',
+    });
+
+    return { success: true, ...r };
   }
 
   @Get('ceo-report/chart.png')

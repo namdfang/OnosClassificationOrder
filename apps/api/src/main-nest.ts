@@ -110,7 +110,10 @@ export async function bootstrap(): Promise<NestFastifyApplication> {
   const fastifyInstance = app.getHttpAdapter().getInstance();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Fastify preParsing hook generics quá phức tạp, chỉ đọc request.url
   fastifyInstance.addHook('preParsing', async (request: any, _reply: any, payload: any) => {
-    if (!request.url?.startsWith('/api/v1/partner')) {
+    // Hai đường cần thân THÔ: chữ ký HMAC ký trên nguyên văn byte gửi đi, nên
+    // dựng lại từ object đã parse là không khớp (thứ tự khoá, khoảng trắng).
+    const canThanTho = request.url?.startsWith('/api/v1/partner') || request.url?.startsWith('/api/v1/agent/zalo/inbound');
+    if (!canThanTho) {
       return payload;
     }
 
