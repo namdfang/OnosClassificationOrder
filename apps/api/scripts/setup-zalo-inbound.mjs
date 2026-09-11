@@ -69,19 +69,22 @@ if (co('--show')) {
 }
 
 const moi = { ...hienTai };
+// Reset chạy TRƯỚC khi thêm, để `--reset-x --x a,b` đọc đúng nghĩa "thay bằng
+// a,b". Đặt sau thì cờ reset lặng lẽ xoá đúng thứ vừa truyền vào.
+if (co('--reset-chairman')) moi.chairmanZaloUids = [];
+if (co('--reset-agent-nick')) moi.agentNickZaloUids = [];
+
 // Nhận NHIỀU uid, cách nhau dấu phẩy: uid Zalo phụ thuộc nick đang nhìn, nên
 // một người có nhiều uid và khai một cái là bỏ sót phần lớn các nhóm.
 if (val('--chairman')) {
   const them = val('--chairman').split(',').map((x) => x.trim()).filter(Boolean);
   moi.chairmanZaloUids = [...new Set([...(moi.chairmanZaloUids ?? []), ...them])];
 }
-if (co('--reset-chairman')) moi.chairmanZaloUids = [];
 
 if (val('--agent-nick')) {
   const them = val('--agent-nick').split(',').map((x) => x.trim()).filter(Boolean);
   moi.agentNickZaloUids = [...new Set([...(moi.agentNickZaloUids ?? []), ...them])];
 }
-if (co('--reset-agent-nick')) moi.agentNickZaloUids = [];
 
 if (val('--subscriber')) {
   const url = val('--subscriber');
