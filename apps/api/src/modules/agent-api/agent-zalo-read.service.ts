@@ -16,8 +16,20 @@ const HAN_GIAY = 15;
 
 /** Hình dạng blob `system_configs` — khai ở đây vì chỉ hai service này đọc nó. */
 export interface CauHinhNgheZalo {
-  /** uid Zalo cá nhân của Chủ tịch — điều kiện kích hoạt (a). */
-  chairmanZaloUid?: string;
+  /**
+   * TẬP uid của Chủ tịch — điều kiện kích hoạt (a). Nhiều uid vì uid Zalo phụ
+   * thuộc nick đang nhìn (xem `agent-zalo-inbound.logic.ts`). Đây là đường ghi
+   * đè bằng tay, dùng chung với `zalo_identities.kind='chairman'`.
+   */
+  chairmanZaloUids?: string[];
+  /**
+   * TẬP uid của các nick TRỢ LÝ AI, nhìn từ phía người khác — điều kiện (b).
+   *
+   * Cùng lý do nhiều uid như trên. Không suy ra được từ `zalo_accounts`: uid ở
+   * bảng đó là uid nick tự nhìn mình, còn `mentions[].uid` là uid người khác
+   * thấy — hai không gian khác nhau.
+   */
+  agentNickZaloUids?: string[];
   /** Bên nhận webhook đã lọc. Nhiều bên vì có thể có agent điều phối lẫn agent nghiệp vụ. */
   subscribers?: Array<{ url: string; secret?: string; enabled?: boolean; description?: string }>;
   /** Bí mật mình đã đăng ký với engine, dùng để xác thực chiều engine → mình. */
@@ -126,12 +138,30 @@ export class AgentZaloReadService {
     return nhom;
   }
 
-  /** uid của mọi nick công ty — dùng cho điều kiện "tag trúng nick mình phụ trách". */
-  async uidNickCongTy(): Promise<Set<string>> {
-    const j = await this.goiEngine<{ data?: Array<{ zaloUid?: string }> } | Array<{ zaloUid?: string }>>('/api/zalo-multi/accounts');
-    const ds = Array.isArray(j) ? j : (j.data ?? []);
+  /**
+   * Tập uid cho hai điều kiện kích hoạt, lấy từ `zalo_identities` — bảng người
+   * vận hành đã xét.
+   *
+   * KHÔNG lấy từ `GET /accounts` của engine: uid ở đó là uid nick TỰ NHÌN MÌNH,
+   * còn `mentions[].uid` là uid phía người khác thấy. Hai không gian khác nhau,
+   * so với nhau thì luôn trượt và trượt im lặng — đã đo: không một uid nào trong
+   * 12 uid bị tag nhiều nhất khớp bảng account.
+   */
+  async tapUidKichHoat(): Promise<{ chuTich: Set<string>; nickAgent: Set<string> }> {
+    const cauHinh = await this.layCauHinh();
+    const ds = await this.connection
+      .collection('zalo_identities')
+      .find({ kind: { $in: ['chairman', 'ai-support'] } }, { projection: { zaloUid: 1, kind: 1 } })
+      .toArray();
 
-    return new Set(ds.map((a) => a.zaloUid).filter((u): u is string => !!u));
+    const chuTich = new Set<string>(cauHinh.chairmanZaloUids ?? []);
+    const nickAgent = new Set<string>(cauHinh.agentNickZaloUids ?? []);
+    for (const d of ds) {
+      if (d.kind === 'chairman') chuTich.add(String(d.zaloUid));
+      else nickAgent.add(String(d.zaloUid));
+    }
+
+    return { chuTich, nickAgent };
   }
 
   /** Bảng uid → `kind` từ `zalo_identities`, để suy vai người gửi. */
@@ -181,8 +211,7 @@ export class AgentZaloReadService {
 
   /** Gắn vai người gửi + đánh dấu mention nào trúng nick công ty. */
   async ganVai(tho: TinThoEngine[], nhom: NhomDaTra): Promise<AgentZaloMessage[]> {
-    const cauHinh = await this.layCauHinh();
-    const nickCty = await this.uidNickCongTy().catch(() => new Set<string>());
+    const { chuTich, nickAgent } = await this.tapUidKichHoat();
 
     const uids = new Set<string>();
     for (const m of tho) {
@@ -206,12 +235,12 @@ export class AgentZaloReadService {
       sender: {
         zaloUid: m.senderUid ? String(m.senderUid) : undefined,
         displayName: m.senderName ?? undefined,
-        role: suyVai(m.senderUid ? String(m.senderUid) : undefined, cauHinh.chairmanZaloUid, kinds),
+        role: suyVai(m.senderUid ? String(m.senderUid) : undefined, chuTich, kinds),
       },
       mentions: (m.mentions ?? []).map((mt) => ({
         uid: mt?.uid ? String(mt.uid) : undefined,
         name: mt?.name || undefined,
-        laNickCongTy: !!mt?.uid && nickCty.has(String(mt.uid)),
+        laNickAgent: !!mt?.uid && nickAgent.has(String(mt.uid)),
       })),
     }));
   }

@@ -57,7 +57,8 @@ const hienTai = (await col.findOne({ key: KEY }))?.value ?? {};
 
 if (co('--show')) {
   console.log('Cấu hình hiện tại:');
-  console.log('  chairmanZaloUid   :', hienTai.chairmanZaloUid ?? '(chưa khai)');
+  console.log('  chairmanZaloUids  :', (hienTai.chairmanZaloUids ?? []).length + ' uid');
+  console.log('  agentNickZaloUids :', (hienTai.agentNickZaloUids ?? []).length + ' uid');
   console.log('  engineWebhookSecret:', hienTai.engineWebhookSecret ? '(đã có, ẩn)' : '(chưa khai)');
   console.log('  subscribers       :', (hienTai.subscribers ?? []).map((s) => s.url).join(', ') || '(chưa có)');
   const r = await fetch(`${engineUrl}/api/zalo-multi/webhooks`, { headers: headerEngine() });
@@ -68,7 +69,19 @@ if (co('--show')) {
 }
 
 const moi = { ...hienTai };
-if (val('--chairman')) moi.chairmanZaloUid = val('--chairman');
+// Nhận NHIỀU uid, cách nhau dấu phẩy: uid Zalo phụ thuộc nick đang nhìn, nên
+// một người có nhiều uid và khai một cái là bỏ sót phần lớn các nhóm.
+if (val('--chairman')) {
+  const them = val('--chairman').split(',').map((x) => x.trim()).filter(Boolean);
+  moi.chairmanZaloUids = [...new Set([...(moi.chairmanZaloUids ?? []), ...them])];
+}
+if (co('--reset-chairman')) moi.chairmanZaloUids = [];
+
+if (val('--agent-nick')) {
+  const them = val('--agent-nick').split(',').map((x) => x.trim()).filter(Boolean);
+  moi.agentNickZaloUids = [...new Set([...(moi.agentNickZaloUids ?? []), ...them])];
+}
+if (co('--reset-agent-nick')) moi.agentNickZaloUids = [];
 
 if (val('--subscriber')) {
   const url = val('--subscriber');

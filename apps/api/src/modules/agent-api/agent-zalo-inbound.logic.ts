@@ -19,6 +19,18 @@ import { NHOM_DUOC_GUI } from './agent-zalo-send.logic';
  *    công ty — còn **165/ngày**.
  */
 
+/**
+ * ⚠️ uid Zalo PHỤ THUỘC NICK ĐANG NHÌN. Đo trên dữ liệu thật 12/09: "Hoàng Anh"
+ * mang 8 uid, mỗi nick công ty thấy một uid riêng; Chủ tịch mang 6. Nghĩa là
+ * KHÔNG có "uid của một người" — chỉ có TẬP uid. Mọi thứ dưới đây nhận `Set`
+ * chứ không nhận một chuỗi, và đó không phải để linh hoạt mà vì một chuỗi là sai.
+ *
+ * Hệ quả thứ hai: `zalo_accounts.zalo_uid` (uid nick tự nhìn mình) KHÁC uid mà
+ * người khác thấy nó, nên so `mentions[].uid` với bảng account là so hai không
+ * gian khác nhau — luôn trượt, và trượt im lặng. Nguồn đúng là `zalo_identities`,
+ * bảng người vận hành đã xét, vốn khoá theo uid phía contact.
+ */
+
 /** Vai người gửi, đủ để agent tự xét "việc của mình không". */
 export const VAI = {
   chairman: 'chairman',
@@ -32,18 +44,20 @@ export type Vai = (typeof VAI)[keyof typeof VAI];
 /**
  * Suy vai từ uid.
  *
- * Chủ tịch xét TRƯỚC mọi thứ: ông nhắn từ Zalo cá nhân, nên trong `zalo_identities`
- * rất có thể đang nằm ở `unknown` hoặc bị đoán nhầm thành khách. Không đặt uid Chủ
- * tịch lên đầu thì điều kiện kích hoạt (a) im lặng mà không ai biết vì sao.
+ * `uidChuTich` xét TRƯỚC bảng danh tính vì nó là đường ghi đè bằng tay: Chủ tịch
+ * nhắn từ Zalo cá nhân nên vài dòng của ông trong `zalo_identities` rất có thể
+ * còn ở `unknown` hoặc bị đoán nhầm thành khách, và đợi xét xong mới chạy thì
+ * điều kiện kích hoạt (a) im lặng suốt thời gian đó.
  *
  * `ai-support` GIỮ RIÊNG chứ không gộp vào `staff`: đó là các nick AI của chính
  * mình, và agent phải phân biệt được để không đối thoại với chính nó.
  */
-export function suyVai(zaloUid: string | undefined, chairmanUid: string | undefined, kindTheoUid: Map<string, string>): Vai {
+export function suyVai(zaloUid: string | undefined, uidChuTich: Set<string>, kindTheoUid: Map<string, string>): Vai {
   if (!zaloUid) return VAI.unknown;
-  if (chairmanUid && zaloUid === chairmanUid) return VAI.chairman;
+  if (uidChuTich.has(zaloUid)) return VAI.chairman;
 
   const k = kindTheoUid.get(zaloUid);
+  if (k === 'chairman') return VAI.chairman;
   if (k === 'staff') return VAI.staff;
   if (k === 'ai-support') return VAI.aiSupport;
   if (k === 'customer') return VAI.customer;
@@ -69,17 +83,35 @@ export type LyDoKichHoat = 'chairman' | 'mention';
  * `null` = không. Trả về LÝ DO chứ không phải boolean: bên nhận cần biết mình
  * được gọi vì Chủ tịch nói hay vì bị tag, hai việc xử lý khác nhau — và khi phải
  * dò vì sao agent im hoặc vì sao nó nổ, lý do là thứ đầu tiên người ta tìm.
+ *
+ * `uidNickAgent` là tập uid của các nick TRỢ LÝ AI nhìn từ phía người khác
+ * (`zalo_identities.kind='ai-support'`), KHÔNG phải `zalo_accounts.zalo_uid` —
+ * xem ghi chú về không gian uid ở đầu file.
  */
-export function lyDoKichHoat(tin: TinDeXet, chairmanUid: string | undefined, uidNickCongTy: Set<string>): LyDoKichHoat | null {
-  if (chairmanUid && tin.senderUid === chairmanUid) return 'chairman';
+export function lyDoKichHoat(tin: TinDeXet, uidChuTich: Set<string>, uidNickAgent: Set<string>): LyDoKichHoat | null {
+  if (tin.senderUid && uidChuTich.has(tin.senderUid)) return 'chairman';
 
-  // Tag người ngoài không tính: chỉ nổ khi ai đó gọi đúng một nick của công ty.
-  // Đây chính là chỗ 736/ngày rút xuống còn 10/ngày.
+  // Tag người ngoài không tính: chỉ nổ khi ai đó gọi đúng một nick trợ lý.
   for (const m of tin.mentions ?? []) {
-    if (m.uid && uidNickCongTy.has(m.uid)) return 'mention';
+    if (m.uid && uidNickAgent.has(m.uid)) return 'mention';
   }
 
   return null;
+}
+
+/**
+ * Khoá chống trùng cho một tin.
+ *
+ * KHÔNG dùng id bản ghi của engine: engine lưu MỘT bản cho MỖI nick công ty có
+ * mặt trong nhóm, nên một câu nói thật thành 2–7 dòng với 2–7 id khác nhau —
+ * đo trên 7 ngày: 26.034 dòng = 12.189 tin thật. Khoá theo id bản ghi thì agent
+ * bị đánh thức 2–7 lần cho cùng một câu, và mỗi lần nó sẽ trả lời lại.
+ *
+ * `zaloMsgId` là id phía Zalo nên giống nhau trên mọi bản. Thiếu nó (tin cũ,
+ * tin hệ thống) thì lùi về id bản ghi: thà trùng còn hơn mất.
+ */
+export function khoaChongTrung(groupGlobalId: string, zaloMsgId: string | undefined, messageId: string): string {
+  return zaloMsgId ? `${groupGlobalId}:${zaloMsgId}` : `rec:${messageId}`;
 }
 
 /**

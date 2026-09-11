@@ -21,9 +21,20 @@ export class AgentZaloTriggerEntity extends DatabaseEntityAbstract {
   @Prop({ required: true, index: true })
   groupGlobalId: string;
 
-  /** Khoá chống trùng: engine có thể giao lại cùng một tin khi lần trước lỗi. */
-  @Prop({ required: true, unique: true })
+  /** Id bản ghi phía engine — chỉ để tra ngược, KHÔNG phải khoá chống trùng. */
+  @Prop({ required: true, index: true })
   messageId: string;
+
+  /**
+   * Khoá chống trùng THẬT: `<groupGlobalId>:<zaloMsgId>`.
+   *
+   * Không khoá theo `messageId` được: engine lưu một bản cho mỗi nick công ty
+   * trong nhóm, nên một câu nói thật ra 2–7 bản ghi với 2–7 id khác nhau (đo 7
+   * ngày: 26.034 dòng = 12.189 tin thật). Khoá sai ở đây nghĩa là agent bị gọi
+   * dậy nhiều lần cho cùng một câu — và mỗi lần nó sẽ trả lời lại.
+   */
+  @Prop({ required: true, unique: true })
+  khoaChongTrung: string;
 
   @Prop({ type: Object, required: true })
   message: Record<string, unknown>;

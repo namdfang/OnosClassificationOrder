@@ -463,15 +463,19 @@ export const AGENT_ZALO_INBOUND_CONFIG_KEY = 'agent_zalo_inbound_config';
 export const AgentZaloSenderZod = z.object({
   zaloUid: z.string().optional(),
   displayName: z.string().optional(),
-  /** `chairman` xét trước bảng danh tính; `ai-support` giữ riêng để agent không tự nói với mình. */
+  /**
+   * `chairman` xét trước bảng danh tính; `ai-support` giữ riêng để agent không
+   * tự nói với mình. Lưu ý uid Zalo phụ thuộc nick đang nhìn — một người có
+   * nhiều uid, nên vai suy từ TẬP uid chứ không từ một uid.
+   */
   role: z.enum(['chairman', 'staff', 'ai-support', 'customer', 'unknown']),
 });
 
 export const AgentZaloMentionZod = z.object({
   uid: z.string().optional(),
   name: z.string().optional(),
-  /** Có phải nick của công ty không — điều kiện kích hoạt (b). */
-  laNickCongTy: z.boolean(),
+  /** Có phải nick TRỢ LÝ AI không — điều kiện kích hoạt (b). */
+  laNickAgent: z.boolean(),
 });
 
 export const AgentZaloMessageZod = z.object({

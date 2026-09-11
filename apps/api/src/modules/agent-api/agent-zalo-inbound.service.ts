@@ -5,7 +5,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import type { AgentZaloMessage, AgentZaloTrigger } from 'shared';
 
-import { chuKyKhop, type LyDoKichHoat, lyDoKichHoat, nhomDuocNghe } from './agent-zalo-inbound.logic';
+import { chuKyKhop, khoaChongTrung, type LyDoKichHoat, lyDoKichHoat, nhomDuocNghe } from './agent-zalo-inbound.logic';
 import { AgentZaloReadService, type NhomDaTra, type TinThoEngine } from './agent-zalo-read.service';
 import { AgentZaloTriggerEntity } from './agent-zalo-trigger.entity';
 
@@ -70,21 +70,20 @@ export class AgentZaloInboundService {
     if (!nhom) return { ketQua: 'khong-map-duoc-nhom' };
     if (!nhomDuocNghe(nhom.kind)) return { ketQua: 'nhom-khong-nghe' };
 
-    const cauHinhUid = cauHinh.chairmanZaloUid;
-    const nickCty = await this.read.uidNickCongTy().catch(() => new Set<string>());
+    const { chuTich, nickAgent } = await this.read.tapUidKichHoat();
 
     // Chủ tịch nhắn thì biết ngay từ payload, khỏi gọi engine. Chỉ khi CẦN xét
     // mention mới phải đọc lại tin — engine không gửi mentions trong payload.
     let mentions: Array<{ uid?: string; name?: string }> = [];
     let tinTho: TinThoEngine | undefined;
-    const laChuTich = !!cauHinhUid && p.senderUid === cauHinhUid;
+    const laChuTich = !!p.senderUid && chuTich.has(p.senderUid);
 
     if (!laChuTich) {
       tinTho = await this.docLaiTin(p.conversationId, p.messageId);
       mentions = (tinTho?.mentions as Array<{ uid?: string }>) ?? [];
     }
 
-    const reason = lyDoKichHoat({ senderUid: p.senderUid, mentions }, cauHinhUid, nickCty);
+    const reason = lyDoKichHoat({ senderUid: p.senderUid, mentions }, chuTich, nickAgent);
     if (!reason) return { ketQua: 'khong-dang-danh-thuc' };
 
     // Đọc lại trượt thì vẫn dựng được tin từ payload — thiếu mentions nhưng đủ
@@ -101,7 +100,7 @@ export class AgentZaloInboundService {
       };
 
     const [message] = await this.read.ganVai([tho], nhom);
-    await this.luuVaChuyenTiep(message, reason);
+    await this.luuVaChuyenTiep(message, reason, khoaChongTrung(nhom.groupGlobalId, tho.zaloMsgId, tho.id));
 
     return { ketQua: 'da-nhan', reason };
   }
@@ -127,18 +126,21 @@ export class AgentZaloInboundService {
    * mình không, poll lại sẽ thiếu. Lưu trước thì tệ nhất là đẩy trượt, và poll
    * vẫn lấy được.
    */
-  private async luuVaChuyenTiep(message: AgentZaloMessage, reason: LyDoKichHoat): Promise<void> {
+  private async luuVaChuyenTiep(message: AgentZaloMessage, reason: LyDoKichHoat, khoa: string): Promise<void> {
     let doc;
     try {
       doc = await this.triggerModel.create({
         reason,
         groupGlobalId: message.groupGlobalId,
         messageId: message.messageId,
+        khoaChongTrung: khoa,
         message,
         receivedAt: new Date(),
       });
     } catch (e) {
-      // E11000 = engine giao lại tin đã xử lý. Đúng như thiết kế, không phải lỗi.
+      // E11000 = tin này đã xử lý rồi. Hai đường dẫn tới đây và cả hai đều bình
+      // thường: engine giao lại sau lỗi, HOẶC cùng một câu nói được engine lưu
+      // thành nhiều bản (mỗi nick công ty một bản) nên giao nhiều lần.
       if ((e as { code?: number }).code === 11000) return;
       throw e;
     }
