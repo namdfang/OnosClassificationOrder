@@ -77,6 +77,8 @@ Guard chạy **trước** mọi validate tham số. Nếu làm ngược lại, m
 | `GET` | `/v1/agent/ceo-report/chart.png` | Ảnh biểu đồ dựng sẵn ở server — agent **không tự vẽ** |
 | `GET` | `/v1/agent/customer-report` | Báo cáo khách: tụt sâu / tăng mạnh / VIP (`AgentGuide/CustomerReport.md`) |
 | **`POST`** | **`/v1/agent/zalo/send`** | **GHI — gửi tin vào nhóm Zalo nội bộ/vận hành. Xem §3.3** |
+| `GET` | `/v1/agent/zalo/groups/:groupGlobalId/messages` | Đọc tin của một nhóm nội bộ/vận hành. Xem §3.4 |
+| `GET` | `/v1/agent/zalo/inbox` | Sự kiện đã lọc, từ một con trỏ. Xem §3.4 |
 | `GET` | `/v1/agent/docs` | Danh mục tài liệu nghiệp vụ |
 | `GET` | `/v1/agent/docs/:slug` | Nội dung markdown của một tài liệu |
 
@@ -265,6 +267,77 @@ từ chối (<mã>)` để không lộ đường dẫn nội bộ.
 **Đường ghi này KHÔNG đi qua `AgentApiRepository`.** Lớp đó cố ý chỉ phơi
 `find`/`aggregate` để giữ BR-3 bằng *hình dạng* chứ không bằng kỷ luật; nếu nhét
 thao tác ghi vào đó thì bất biến kia mất hiệu lực cho toàn bộ phần đọc.
+
+### 3.4 Nghe tin Zalo — `zalo/groups/:id/messages`, `zalo/inbox`, và webhook
+
+> **File:** `agent-zalo-inbound.logic.ts` (luật, hàm thuần + spec) · `agent-zalo-read.service.ts` · `agent-zalo-inbound.service.ts` · `agent-zalo-inbound.controller.ts` · `agent-zalo-trigger.entity.ts`
+> **Tài liệu cho agent:** `documents/AgentGuide/ZaloListen.md`
+> **Cấu hình:** `system_configs` khoá `agent_zalo_inbound_config`, dựng bằng `apps/api/scripts/setup-zalo-inbound.mjs`
+
+Engine Zalo **đã có sẵn** cả hai nửa: `GET /api/zalo-multi/conversations/:id/messages`
+và một hệ đăng ký webhook (`GET/POST /api/zalo-multi/webhooks`, sự kiện
+`message.received`…) chưa ai dùng. Lớp này không dựng lại chúng — nó thêm ba thứ
+engine không biết, và **đó mới là toàn bộ giá trị của lớp này**.
+
+**1. Engine không biết `kind`.** Nó đẩy mọi nhóm. Nếu để agent đăng ký thẳng với
+engine thì nội dung nhóm khách hàng và nhóm cá nhân nhân viên rời khỏi hệ thống —
+phá đúng cái chốt riêng tư mà `kind=internal` sinh ra để giữ. Nên đường đi bắt
+buộc là **engine → hệ thống này → agent**, không phải engine → agent.
+
+**2. Chi phí.** Nhóm nội bộ + vận hành: **855 tin thật/ngày**. Đánh thức agent
+trên mỗi tin ≈ 18–28 triệu token/ngày (số hệ cũ đã trả giá để biết). Lọc còn
+**156 lượt/ngày**: Chủ tịch gửi, hoặc tag trúng nick trợ lý.
+
+**3. Vai người gửi.** `senderType` của engine chỉ có `contact`/`self`.
+
+#### Hai cái bẫy trong dữ liệu Zalo — cả hai đều hỏng ÂM THẦM
+
+**uid phụ thuộc NICK ĐANG NHÌN.** Đo 12/09 trên prod: "Hoàng Anh" mang **8 uid**,
+mỗi nick công ty thấy một uid riêng; Chủ tịch mang 8. Không tồn tại "uid của một
+người", chỉ có **tập uid** — nên `chairmanZaloUids`/`agentNickZaloUids` là mảng,
+và đó không phải để linh hoạt mà vì một chuỗi là sai.
+
+Hệ quả nặng hơn: `zalo_accounts.zalo_uid` là uid nick **tự nhìn mình**, còn
+`mentions[].uid` là uid **người khác thấy nó**. So hai bảng đó với nhau luôn trượt —
+kiểm chứng: không một uid nào trong 12 uid bị tag nhiều nhất khớp `zalo_accounts`.
+Bản đầu của tính năng này so đúng như vậy, và bộ lọc tag **chết hoàn toàn** mà
+không có triệu chứng nào. Nguồn đúng là `zalo_identities` (khoá theo uid phía
+contact) cộng tập uid khai tường minh trong config.
+
+**Một câu nói = nhiều bản ghi.** Engine lưu một dòng cho MỖI nick công ty có mặt
+trong nhóm: 7 ngày = 26.034 dòng cho 12.189 tin thật (2,1×, cao nhất 7 bản). Khoá
+chống trùng vì thế là `<groupGlobalId>:<zaloMsgId>` (`khoaChongTrung()`), KHÔNG
+phải id bản ghi — khoá sai là agent bị gọi dậy 2–7 lần cho cùng một câu và trả lời
+lại từng lần.
+
+#### Luồng
+
+```
+engine ──message.received──► POST /v1/agent/zalo/inbound   (chữ ký x-webhook-signature, HMAC-SHA256 hex)
+                                   │  tra conversationId → nhóm (rẻ nhất trước, chặn nhóm khách KHÔNG tốn lời gọi engine)
+                                   │  Chủ tịch? → biết ngay từ payload
+                                   │  không? → đọc lại tin lấy mentions (engine không gửi mentions)
+                                   ▼
+                             agentZaloTriggers (TTL 14 ngày, unique khoaChongTrung)
+                                   │
+                    ┌──────────────┴──────────────┐
+              đẩy tới subscribers            GET /v1/agent/zalo/inbox
+              (x-signature HMAC hex)         (cùng kho, không phải nguồn thứ hai)
+```
+
+**Lưu TRƯỚC rồi mới đẩy**, và đẩy trượt **không** ném ngược lên engine: sự kiện đã
+bền, bên nhận poll lại là có; ném lỗi chỉ khiến engine giao lại mãi thứ đã xử lý
+xong. Cùng lý do, tin bị loại trả `200` — "không đáng đánh thức ai" là kết quả
+đúng, không phải lỗi giao.
+
+Đường `/agent/zalo/inbound` nằm ở **controller riêng** vì `AgentApiController` gắn
+`AgentApiKeyGuard` cho cả lớp, mà engine không có khoá agent. Nó cũng cần **thân
+thô** để kiểm chữ ký nên được thêm vào hook `preParsing` ở `main-nest.ts` cạnh
+`/api/v1/partner`.
+
+`ZaloIdentityKind` thêm `Chairman`: đánh dấu Chủ tịch là việc của người vận hành ở
+màn *Danh tính*, không phải hằng số trong mã — và phải đánh dấu **đủ mọi dòng** của
+ông vì lý do uid ở trên.
 
 ## 4. UI Components
 

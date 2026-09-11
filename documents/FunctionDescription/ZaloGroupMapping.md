@@ -462,6 +462,36 @@ vẫn cần cờ này: so mốc là thứ client dễ quên nhất, mà quên th
 bằng dữ liệu cũ với giọng chắc chắn. Tính ở máy chủ thì mọi client được bảo vệ như
 nhau. Đề xuất của dev tích hợp — họ đã dính đúng lỗi đó ở hệ báo cáo bên mình.
 
+## Loại danh tính `chairman` + uid Zalo phụ thuộc nick đang nhìn (12/09/2026)
+
+`ZaloIdentityKind` thêm `Chairman`. Không phải để đẹp bảng: Chủ tịch nhắn trong
+nhóm là **một điều kiện kích hoạt agent** (`AgentApi.md` §3.4), nên nó phải diễn
+đạt được ở tầng dữ liệu chứ không nằm ở hằng số trong mã. Luật gợi ý
+(`zalo-identity.logic.ts`) **không bao giờ tự đoán** loại này — đây là phán đoán
+của người, đánh dấu ở màn *Danh tính*.
+
+**Phải đánh dấu ĐỦ mọi dòng của ông, không phải một dòng.** Đo trên prod 12/09:
+
+| Người | Số uid | Vì sao |
+|---|---|---|
+| Chủ tịch ("Onos") | **8** | mỗi nick công ty thấy ông dưới một uid riêng |
+| "Hoàng Anh" | 8 | như trên |
+| nick trợ lý "Onos Ai" | 7 | khi bị người khác @ |
+
+uid Zalo **phụ thuộc nick đang nhìn**. Bảng `zalo_identities` vì thế có nhiều
+dòng cho cùng một người, và đó là đúng — khoá theo `zaloUid` vẫn là lựa chọn
+đúng (xem ghi chú đầu `zalo-identity-kind.ts`), chỉ là một người chiếm nhiều khoá.
+Thiếu một dòng thì trong nhóm mà nick đó trực, agent im lặng **không có triệu
+chứng gì**.
+
+Thêm một hệ quả đã suýt ship hỏng: `zalo_accounts.zalo_uid` (uid nick tự nhìn
+mình) **KHÁC** uid người khác thấy nó, nên so `mentions[].uid` với bảng account
+luôn trượt. Chi tiết + cách phòng: `Architecture/Common_Pitfalls.md §12`.
+
+Công cụ: `apps/api/scripts/setup-zalo-inbound.mjs --chairman <uid,uid,...>
+--agent-nick <uid,...> --sync-identities` (ghi cả blob cấu hình lẫn bảng danh
+tính, để hai nguồn không lệch nhau).
+
 ## Vận hành trên production (từ 02/09/2026)
 
 Hai máy, chia việc theo mạng — không gộp được vì **production không SSH sang

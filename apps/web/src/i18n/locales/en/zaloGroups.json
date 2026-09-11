@@ -97,7 +97,8 @@
       "unknown": "Unreviewed",
       "ai-support": "AI support",
       "staff": "Staff",
-      "customer": "Customer / external"
+      "customer": "Customer / external",
+      "chairman": "Chairman"
     },
     "allKinds": "All",
     "pending": "Unconfirmed",

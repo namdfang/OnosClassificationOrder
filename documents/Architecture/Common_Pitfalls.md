@@ -413,6 +413,24 @@ Dấu hiệu nhận biết context: **không có HTTP adapter = tiến trình mi
 
 Cron nạp từ DB (`CronjobRunnerService`) chặn ở `onModuleInit` vì nó đăng ký trong `setTimeout` 2 giây — sau mọi bước dọn dẹp ở bootstrap.
 
+## 12. ⚠️ ID của hệ ngoài có thể là ID THEO GÓC NHÌN, không phải ID toàn cục — so nhầm hai không gian thì trượt IM LẶNG
+
+**Gặp ở:** `apps/api/src/modules/agent-api/agent-zalo-inbound.logic.ts`, `agent-zalo-read.service.ts` (12/09/2026, bắt được TRƯỚC khi bật cho agent).
+
+**Triệu chứng:** bộ lọc "có ai @ đúng nick công ty không" không bao giờ khớp. Không lỗi, không cảnh báo, không ngoại lệ — chỉ là tính năng im lặng vĩnh viễn. Đo lại mới lộ: **không một uid nào** trong 12 uid bị tag nhiều nhất khớp bảng `zalo_accounts`.
+
+**Root cause:** uid Zalo **phụ thuộc nick đang nhìn**. Cùng một người mang uid khác nhau tuỳ nick nào của công ty thấy họ — đo trên prod: "Hoàng Anh" có **8 uid**, Chủ tịch có 8. Và `zalo_accounts.zalo_uid` là uid nick **tự nhìn mình**, khác hẳn uid mà người khác thấy nó. Hai cột cùng tên `uid`, cùng kiểu `text`, trông như nhau, so được với nhau mà không hề đúng.
+
+**Vì sao type system không cứu:** cả hai đều là `string`. Không có gì để bắt.
+
+**Rule:**
+
+1. Trước khi so hai ID từ hệ ngoài, **chứng minh chúng cùng không gian** bằng dữ liệu thật — đếm số dòng khớp. Khớp 0 dòng trên dữ liệu sống là bằng chứng bạn đang so nhầm, không phải "chưa có dữ liệu".
+2. Không tồn tại "ID của một người" cho đến khi đã kiểm. Mặc định dùng `Set<string>`, không dùng `string`.
+3. Danh tính đã được người xét (ở đây: `zalo_identities`) đáng tin hơn ID suy ra từ hệ ngoài, vì nó khoá đúng không gian mà người xét nhìn thấy.
+
+**Anh em cùng gốc — cùng một nguyên nhân, hậu quả ngược lại:** engine lưu **một bản ghi cho mỗi nick công ty** trong nhóm, nên một câu nói thật ra 2–7 dòng với 2–7 id khác nhau (7 ngày: 26.034 dòng = 12.189 tin thật). Khoá chống trùng theo id bản ghi của hệ ngoài là **đánh thức agent 2–7 lần cho cùng một câu**. Khoá đúng phải theo id do NGUỒN GỐC cấp (`zaloMsgId`), không phải id do hệ trung gian cấp.
+
 ## Khi nào update file này
 
 - Phát hiện bug pattern cross-cutting (ảnh hưởng > 1 module).

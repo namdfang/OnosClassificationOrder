@@ -112,6 +112,25 @@ if (callback) {
   console.log(`${cu ? 'Cập nhật' : 'Tạo'} đăng ký engine → ${r.status} ${(await r.text()).slice(0, 200)}`);
 }
 
+// Đồng bộ config → bảng danh tính. Hai nguồn cùng trả lời "ai là Chủ tịch" mà
+// lệch nhau thì không ai biết cái nào đúng; bước này làm chúng khớp, và quan
+// trọng hơn là để người vận hành NHÌN THẤY ở màn Danh tính thay vì phải đọc blob.
+if (co('--sync-identities')) {
+  const idc = mongoose.connection.db.collection('zalo_identities');
+  for (const [ds, kind] of [
+    [moi.chairmanZaloUids ?? [], 'chairman'],
+    [moi.agentNickZaloUids ?? [], 'ai-support'],
+  ]) {
+    if (ds.length === 0) continue;
+    const r = await idc.updateMany(
+      { zaloUid: { $in: ds } },
+      { $set: { kind, confirmedAt: new Date(), updatedAt: new Date() } },
+    );
+    const thieu = ds.length - (await idc.countDocuments({ zaloUid: { $in: ds } }));
+    console.log(`  ${kind}: cập nhật ${r.modifiedCount}/${ds.length} uid` + (thieu > 0 ? ` — ${thieu} uid CHƯA có dòng danh tính (chưa nhắn tin nào)` : ''));
+  }
+}
+
 await col.updateOne(
   { key: KEY },
   { $set: { key: KEY, value: moi, description: 'Nghe tin Zalo cho agent: uid Chủ tịch + bên nhận webhook', updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
