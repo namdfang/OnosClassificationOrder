@@ -7,6 +7,45 @@
 > **API:** `GET /v1/zalo-groups`, `GET /v1/zalo-groups/coverage`, `GET /v1/zalo-groups/suggestions`, `POST /v1/zalo-groups/sync`, `PATCH /v1/zalo-groups/:id`
 
 
+
+## Gộp về một engine — `onosceo` đã dừng hẳn (11/09/2026)
+
+Trước đây chạy SONG SONG hai engine Zalo, và hai script đồng bộ đọc engine ở `onosceo`. Các nick đã được quét lại trên engine prod ở `onosnew`, nên phiên bên cũ thành `qr_pending` — máy cũ ngừng thu tin mới nhưng **vẫn giữ toàn bộ lịch sử**.
+
+### Vì sao không tắt thẳng được
+
+Đo trước khi chuyển: `onosceo` có **179 nhóm / 29.784 tin từ 18/08**, `onosnew` chỉ có **153 nhóm / 16.385 tin từ 07/09**. Engine chỉ biết tới một nhóm sau khi kéo được nhóm đó về, mà `Onos Ai` — nick phủ rộng nhất — mới kéo 37/178 nhóm. Tắt lúc đó là mất **62 nhóm** (42 trong số đó còn dùng trong 14 ngày) và 20 ngày lịch sử.
+
+### Cách chuyển
+
+Chép theo **KHOÁ TỰ NHIÊN, không theo id**: hội thoại nhận dạng bằng `(zalo_account_id, external_thread_id)`, tin nhắn bằng `(conversation_id, zalo_msg_id)`. Mỗi engine tự cấp id riêng cho cùng một nhóm, nên chép theo id là nhân đôi 117 nhóm có ở cả hai bên. Nhóm đã có thì chỉ nhét tin cũ vào hội thoại sẵn có; nhóm chưa có thì chèn mới và **giữ nguyên id cũ** (đã kiểm: 0 id đụng nhau) để liên kết trả lời/cảm xúc còn nguyên.
+
+Ba chỗ phải xử lý riêng:
+
+| Vấn đề | Cách làm |
+|---|---|
+| `zalo_account_id` khác nhau giữa hai engine | ánh xạ qua `zalo_uid` |
+| `replied_by_user_id` trỏ sang `engine_users` của máy cũ (2 người vs 27) | bỏ trống — chỉ là nhãn "ai trả lời từ CRM" |
+| Nick `Onos` chỉ có ở máy cũ, `owner_user_id` cũng chỉ có ở máy cũ | chép kèm, gán chủ sở hữu đang dùng, **xoá `session_data` + đặt `qr_pending`** để engine không thử đăng nhập bằng phiên của máy khác |
+
+**Bẫy đã mắc:** bản chạy đầu thiếu `COMMIT` sau `BEGIN`. psql huỷ sạch lúc thoát mà **KHÔNG báo lỗi** — màn hình vẫn in đủ số liệu như thành công. Chỉ phát hiện khi đo lại thấy số nhóm không đổi. Script SQL nào mở `BEGIN` thủ công thì phải kiểm có `COMMIT` trước khi tin vào kết quả in ra.
+
+### Kết quả
+
+| | Trước | Sau |
+|---|---|---|
+| Nhóm (`group_global_id`) | 153 | **215** |
+| Tin nhắn | 16.387 | **46.171** |
+| Lịch sử từ | 07/09 | **18/08** |
+
+8 nick đang chạy giữ nguyên `connected` + còn phiên. Engine cũ (`zalo-onos-zalo-engine-1`, DB, Redis trên `onosceo`) **đã dừng**, volume giữ nguyên làm kho tra cứu — bật lại được nếu cần đối chiếu.
+
+### Công cụ đo
+
+`apps/api/scripts/check-zalo-engine-parity.mjs` — so hai engine, in thẳng `✅ TẮT ĐƯỢC` hay `⛔ CHƯA`, kèm danh sách nhóm còn thiếu. Muốn chạy lại phải bật container bên `onosceo` lên trước.
+
+Hai script đồng bộ nay mặc định đọc **`onosnew`** (`--ssh/--container/--db` để trỏ nơi khác).
+
 ## Nối nhóm ↔ khách: gợi ý theo khuôn tên + tạo khách ngay tại màn nối (11/09/2026)
 
 Mục tiêu: biến trang này thành **source of truth** cho quan hệ nhóm Zalo ↔ khách, thay vì chỉ nối được tới những khách do đơn hàng sinh ra.
