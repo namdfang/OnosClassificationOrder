@@ -9,7 +9,9 @@
 
 ## 1. Overview
 
-Bộ API **chỉ đọc** phục vụ một AI agent nội bộ trả lời khách hàng qua tin nhắn. Agent cần hai thứ: **hiểu nghiệp vụ** (đọc tài liệu) và **tra được dữ liệu thực** (đọc đơn của khách).
+Bộ API phục vụ một AI agent nội bộ trả lời khách hàng qua tin nhắn. Agent cần hai thứ: **hiểu nghiệp vụ** (đọc tài liệu) và **tra được dữ liệu thực** (đọc đơn của khách).
+
+**Chỉ đọc, trừ đúng một đường.** `POST /v1/agent/zalo/send` (§3.3) là thao tác GHI duy nhất — gửi tin vào nhóm Zalo **nội bộ/vận hành**, CẤM tuyệt đối nhóm khách hàng. Nó tách hẳn khỏi `AgentApiRepository` để phần đọc vẫn giữ nguyên bất biến BR-3.
 
 ### ⚠️ `API-19` — nguyên tắc đã ĐẢO CHIỀU
 
@@ -69,6 +71,12 @@ Guard chạy **trước** mọi validate tham số. Nếu làm ngược lại, m
 | `GET` | `/v1/agent/tables` | Liệt kê **mọi collection** (`API-19`), kèm mô tả bảng và **chính sách đầy đủ từng trường** (`API-18`) — xem §3.1 |
 | `GET` | `/v1/agent/tables/:table/rows` | Đọc thô, phân trang theo con trỏ trên `_id`. Query: `limit`, `cursor`, `fields`, `filter` (`API-6`) |
 | `POST` | `/v1/agent/query` | Truy vấn có kiểm soát: lọc, sắp xếp, đếm, nhóm, tổng hợp |
+| `GET` | `/v1/agent/seller-support` | Gộp sẵn một seller: tóm tắt nhóm Zalo + số đơn sống + sản phẩm hay đặt (`ZaloGroupMapping.md`) |
+| `GET` | `/v1/agent/ceo-overview` | Bảng số CEO Dashboard một kỳ |
+| `GET` | `/v1/agent/ceo-report` | Nhận định tiếng Việt hệ thống tự sinh cho kỳ đó |
+| `GET` | `/v1/agent/ceo-report/chart.png` | Ảnh biểu đồ dựng sẵn ở server — agent **không tự vẽ** |
+| `GET` | `/v1/agent/customer-report` | Báo cáo khách: tụt sâu / tăng mạnh / VIP (`AgentGuide/CustomerReport.md`) |
+| **`POST`** | **`/v1/agent/zalo/send`** | **GHI — gửi tin vào nhóm Zalo nội bộ/vận hành. Xem §3.3** |
 | `GET` | `/v1/agent/docs` | Danh mục tài liệu nghiệp vụ |
 | `GET` | `/v1/agent/docs/:slug` | Nội dung markdown của một tài liệu |
 
@@ -208,6 +216,50 @@ nhất để điều đó không xảy ra là không có định nghĩa thứ ha
 > vì khi đó việc mở rộng chỉ phục vụ một trang quản trị — đổi thứ agent nhìn thấy để tiện cho trang là
 > đánh đổi sai. Nay nó phục vụ chính agent, và người dùng đã xác nhận chưa có agent thật nào gọi
 > production nên không phá vỡ tương thích với ai.
+
+### 3.3 `POST /v1/agent/zalo/send` — ngoại lệ DUY NHẤT của luật chỉ-đọc
+
+> **File:** `agent-zalo-send.logic.ts` (luật, hàm thuần + spec) · `agent-zalo-send.service.ts` (gọi engine)
+> **Tài liệu cho agent:** `documents/AgentGuide/ZaloSend.md`
+
+Mọi endpoint khác của bộ này là chỉ đọc (BR-3) — sai thì cùng lắm trả nhầm số.
+Đường này nhắn ra ngoài, tới người thật, và **không rút lại được**. Vì thế luật
+chặn nằm trong một **hàm thuần có test riêng**, không rải trong service.
+
+**Vì sao đặt ở đây thay vì nhờ nhà cung cấp engine mở thêm.** Engine Zalo đã gửi
+được từ lâu (`POST /conversations/:id/messages`), và app này vốn gọi engine mỗi
+ngày cho màn chat. Thứ duy nhất còn thiếu là một lớp mỏng **có chốt chặn** — agent
+không có phiên người dùng nên không đi qua proxy của màn chat được. Xác thực với
+engine dùng đúng cơ chế proxy đang chạy: `x-service-token` = `{ts}.{HMAC-SHA256(ts, ZALO_ENGINE_SECRET)}`
+cộng bốn header danh tính, trong đó `x-user-id: 'agent-api'` để nhật ký bên engine
+không lẫn agent với người thật.
+
+**Chốt chặn** (`chonHoiThoai`):
+
+| `zalo_group_links.kind` | Kết quả |
+|---|---|
+| `internal`, `operation` | Cho gửi |
+| `seller` | **400 CẤM** — nhóm khách hàng |
+| `unreviewed` | 400 — chưa phân loại thì chưa biết bên kia là ai |
+
+`conversationId` do agent truyền **phải thuộc nhóm đã duyệt**; nếu không thì chỉ
+cần biết một id hội thoại bất kỳ là nhắn được vào nhóm khách, và chốt phân loại
+nhóm thành vô nghĩa. Bỏ trống thì lấy hội thoại đầu — mỗi nick trong nhóm có một
+hội thoại riêng, gửi bằng nick nào cũng vào đúng nhóm đó.
+
+Nội dung quá `4000` ký tự bị **cắt** chứ không từ chối: tin quá dài thường là agent
+dán nhầm cả báo cáo, gửi được phần đầu vẫn hơn im lặng.
+
+**Hạn mức riêng** `AGENT_ZALO_SEND_PER_MIN = 10` (chứ không dùng chung hạn mức đọc),
+và **ghi vết cả lượt bị chặn** vào `agentApiLogs` capability `zalo_send` — biết agent
+định nhắn vào đâu quan trọng ngang biết nó đã nhắn gì.
+
+Nguyên văn lỗi từ engine chỉ vào log Winston; agent nhận câu chung `503 Engine Zalo
+từ chối (<mã>)` để không lộ đường dẫn nội bộ.
+
+**Đường ghi này KHÔNG đi qua `AgentApiRepository`.** Lớp đó cố ý chỉ phơi
+`find`/`aggregate` để giữ BR-3 bằng *hình dạng* chứ không bằng kỷ luật; nếu nhét
+thao tác ghi vào đó thì bất biến kia mất hiệu lực cho toàn bộ phần đọc.
 
 ## 4. UI Components
 

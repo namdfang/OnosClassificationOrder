@@ -15,6 +15,7 @@ import { AgentExceptionFilter } from './agent-exception.filter';
 import { AgentQueryService } from './agent-query.service';
 import { AgentReadService } from './agent-read.service';
 import { AgentSellerSupportService } from './agent-seller-support.service';
+import { AgentZaloSendService } from './agent-zalo-send.service';
 
 /**
  * Bộ API nội bộ cho AI agent (`API-1`, mở hết ở `API-19`).
@@ -36,7 +37,9 @@ import { AgentSellerSupportService } from './agent-seller-support.service';
     CustomerReportModule,
   ],
   controllers: [AgentApiController, AgentApiAdminController],
-  providers: [AgentSellerSupportService, 
+  providers: [
+    AgentSellerSupportService,
+    AgentZaloSendService,
     AgentAdminService,
     AgentApiKeyGuard,
     AgentExceptionFilter,

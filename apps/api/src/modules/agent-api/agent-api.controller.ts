@@ -1,7 +1,9 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post, Query, Res, UseFilters, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import type { FastifyReply } from 'fastify';
 import type { CeoOverview, CeoReport } from 'shared';
+import type { GetCustomerReportResDto } from 'shared';
 import {
   AgentQueryPayload,
   CeoOverviewQueryDto,
@@ -16,19 +18,16 @@ import {
   ReadAgentTableQueryDto,
   ReadAgentTableResDto,
 } from 'shared';
+import { AgentZaloSendDto, type AgentZaloSendResDto } from 'shared';
 import { Logger } from 'winston';
 
 import { Auth } from '@/decorators';
-import type { FastifyReply } from 'fastify';
-
-import type { GetCustomerReportResDto } from 'shared';
-
 import { SWAGGER_AGENT_KEY_SECURITY } from '@/setup-swagger';
 
 import { CeoDashboardService } from '../ceo-dashboard/ceo-dashboard.service';
 import { CeoReportService } from '../ceo-dashboard/ceo-report.service';
 import { CustomerReportService } from '../customer-report/customer-report.service';
-import { AGENT_API_RATE_LIMIT_PER_MIN, AGENT_API_RATE_LIMIT_TTL_MS } from './agent-api.constants';
+import { AGENT_API_RATE_LIMIT_PER_MIN, AGENT_API_RATE_LIMIT_TTL_MS, AGENT_ZALO_SEND_PER_MIN } from './agent-api.constants';
 import { AgentApiKeyGuard } from './agent-api-key.guard';
 import { AgentAuditService } from './agent-audit.service';
 import { AgentDocsService } from './agent-docs.service';
@@ -37,6 +36,7 @@ import { AgentQueryService } from './agent-query.service';
 import { AgentReadService } from './agent-read.service';
 import { AgentSellerSupportService } from './agent-seller-support.service';
 import { AGENT_SWAGGER_DESCRIPTION, agentSummary } from './agent-swagger-guide';
+import { AgentZaloSendService } from './agent-zalo-send.service';
 
 /**
  * Bộ API nội bộ cho AI agent (`API-1`) — xem
@@ -102,6 +102,7 @@ export class AgentApiController {
     private readonly ceo: CeoDashboardService,
     private readonly ceoReports: CeoReportService,
     private readonly customerReports: CustomerReportService,
+    private readonly zaloSend: AgentZaloSendService,
     private readonly audit: AgentAuditService,
     @Inject('winston') private readonly logger: Logger,
   ) {}
@@ -313,6 +314,47 @@ export class AgentApiController {
     this.audit.write({ capability: 'customer_report', queryDigest: { from: q.from, to: q.to }, returned: report ? 1 : 0, durationMs: Date.now() - startedAt, outcome: 'ok' });
 
     return { success: true, data: { report, generating: this.customerReports.isGenerating(q.from, q.to) } };
+  }
+
+  /**
+   * GỬI tin Zalo — ngoại lệ DUY NHẤT của luật chỉ-đọc (BR-3).
+   *
+   * Chốt chặn ở `agent-zalo-send.logic.ts`: chỉ nhóm `internal`/`operation`,
+   * CẤM nhóm khách và nhóm chưa phân loại; `conversationId` (nếu truyền) phải
+   * thuộc đúng nhóm đó. Mọi lượt gửi đều vào nhật ký kèm nội dung — nhắn ra
+   * ngoài mà không có vết thì sau này không truy được ai đã nói gì.
+   */
+  @Post('zalo/send')
+  @Auth([], [], { public: true })
+  @Throttle({ default: { limit: AGENT_ZALO_SEND_PER_MIN, ttl: AGENT_API_RATE_LIMIT_TTL_MS } })
+  @ApiOperation({ summary: 'Gửi tin vào nhóm Zalo nội bộ/vận hành (CẤM nhóm khách)' })
+  @HttpCode(HttpStatus.OK)
+  async sendZalo(@Body() dto: AgentZaloSendDto): Promise<AgentZaloSendResDto> {
+    const startedAt = Date.now();
+    this.log('POST', '/agent/zalo/send');
+    try {
+      const data = await this.zaloSend.guiTinNhom(dto.groupGlobalId, dto.content, dto.conversationId);
+      this.audit.write({
+        capability: 'zalo_send',
+        queryDigest: { groupGlobalId: dto.groupGlobalId, conversationId: data.conversationId, content: dto.content.slice(0, DIGEST_MAX) },
+        returned: 1,
+        durationMs: Date.now() - startedAt,
+        outcome: 'ok',
+      });
+
+      return { success: true, data };
+    } catch (e) {
+      // Ghi vết cả lượt BỊ CHẶN: biết agent định nhắn vào đâu quan trọng ngang
+      // biết nó đã nhắn gì.
+      this.audit.write({
+        capability: 'zalo_send',
+        queryDigest: { groupGlobalId: dto.groupGlobalId, content: dto.content.slice(0, DIGEST_MAX), loi: e instanceof Error ? e.message : String(e) },
+        returned: 0,
+        durationMs: Date.now() - startedAt,
+        outcome: 'error',
+      });
+      throw e;
+    }
   }
 
   @Get('ceo-report/chart.png')

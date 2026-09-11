@@ -430,3 +430,23 @@ export class GetAgentSellerSupportResDto {
   success!: boolean;
   data!: AgentSellerSupportItem[];
 }
+
+// ---------------------------------------------------------------------------
+// Gửi tin Zalo — ngoại lệ DUY NHẤT của luật chỉ-đọc (BR-3). Chốt chặn ở
+// `agent-zalo-send.logic.ts`: chỉ nhóm nội bộ/vận hành, CẤM nhóm khách.
+// ---------------------------------------------------------------------------
+
+export const AgentZaloSendZod = z.object({
+  /** Mã nhóm Zalo (khoá dùng chung với `zalo_group_links`, cũng là khoá báo cáo). */
+  groupGlobalId: z.string().min(4).max(120),
+  content: z.string().min(1).max(8000),
+  /** Chọn nick gửi: mỗi nick trong nhóm có một hội thoại riêng. Bỏ trống = nick đầu. */
+  conversationId: z.string().min(4).max(120).optional(),
+});
+export class AgentZaloSendDto extends createZodDto(extendApi(AgentZaloSendZod)) {}
+
+export const AgentZaloSendResZod = z.object({
+  success: z.literal(true),
+  data: z.object({ conversationId: z.string(), groupTitle: z.string().optional(), sentAt: z.string() }),
+});
+export class AgentZaloSendResDto extends createZodDto(extendApi(AgentZaloSendResZod)) {}
