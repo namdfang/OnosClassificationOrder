@@ -436,18 +436,42 @@ export class GetAgentSellerSupportResDto {
 // `agent-zalo-send.logic.ts`: chỉ nhóm nội bộ/vận hành, CẤM nhóm khách.
 // ---------------------------------------------------------------------------
 
-export const AgentZaloSendZod = z.object({
-  /** Mã nhóm Zalo (khoá dùng chung với `zalo_group_links`, cũng là khoá báo cáo). */
-  groupGlobalId: z.string().min(4).max(120),
-  content: z.string().min(1).max(8000),
-  /** Chọn nick gửi: mỗi nick trong nhóm có một hội thoại riêng. Bỏ trống = nick đầu. */
-  conversationId: z.string().min(4).max(120).optional(),
-});
+/**
+ * Hai chế độ gửi, chọn bằng SỰ CÓ MẶT của `groupGlobalId`:
+ *
+ * - có `groupGlobalId` → gửi NHÓM, chốt theo `kind` nhóm; `conversationId` (nếu
+ *   có) phải thuộc chính nhóm đó.
+ * - không có → NHẮN RIÊNG theo `conversationId`, chốt theo VAI người nhận.
+ *
+ * Hai chốt khác nhau nên không gộp được; và để `conversationId` tự quyết định
+ * chế độ là cách chắc chắn một ngày nào đó một id nhóm đi lọt vào đường DM.
+ */
+export const AgentZaloSendZod = z
+  .object({
+    /** Mã nhóm Zalo (khoá dùng chung với `zalo_group_links`, cũng là khoá báo cáo). */
+    groupGlobalId: z.string().min(4).max(120).optional(),
+    content: z.string().min(1).max(8000),
+    /** Gửi nhóm: chọn nick gửi, bỏ trống = tự thử. Nhắn riêng: BẮT BUỘC, là hội thoại 1-1. */
+    conversationId: z.string().min(4).max(120).optional(),
+  })
+  .refine((v) => !!v.groupGlobalId || !!v.conversationId, {
+    message: 'Phải cho biết gửi đi đâu: groupGlobalId (nhóm) hoặc conversationId (nhắn riêng).',
+  });
 export class AgentZaloSendDto extends createZodDto(extendApi(AgentZaloSendZod)) {}
 
 export const AgentZaloSendResZod = z.object({
   success: z.literal(true),
-  data: z.object({ conversationId: z.string(), groupTitle: z.string().optional(), sentAt: z.string() }),
+  data: z.object({
+    conversationId: z.string(),
+    groupTitle: z.string().optional(),
+    /**
+     * Chỉ có khi nhắn riêng. Trả về để agent đối chiếu mình vừa nhắn cho AI —
+     * `zaloUid` không dùng làm danh tính được (phụ thuộc nick đang nhìn), nên
+     * vai + tên hiển thị là thứ duy nhất kiểm lại được.
+     */
+    recipient: z.object({ displayName: z.string().optional(), role: z.string() }).optional(),
+    sentAt: z.string(),
+  }),
 });
 export class AgentZaloSendResDto extends createZodDto(extendApi(AgentZaloSendResZod)) {}
 

@@ -10,7 +10,7 @@ import { ApiConfigService } from '@/shared/services/api-config.service';
 
 import { SystemConfigService } from '../system-config/system-config.service';
 import { nhomDuocNghe, suyVai } from './agent-zalo-inbound.logic';
-import { LY_DO_CHAN } from './agent-zalo-send.logic';
+import { kiemNguoiNhanDm, LY_DO_CHAN } from './agent-zalo-send.logic';
 
 const HAN_GIAY = 15;
 
@@ -174,6 +174,64 @@ export class AgentZaloReadService {
 
     return new Map(ds.map((d) => [String(d.zaloUid), String(d.kind)]));
   }
+
+  /**
+   * Tra một hội thoại RIÊNG (1-1) và xác định người bên kia là ai.
+   *
+   * Danh tính lấy từ `zalo_identities` — bảng người vận hành đã xét — cộng tập
+   * uid Chủ tịch khai trong cấu hình. Hội thoại 1-1 bên engine mang
+   * `threadType='user'`, và uid của người đó nằm ở bản ghi contact, đúng không
+   * gian uid mà bảng danh tính dùng.
+   *
+   * Hội thoại NHÓM bị từ chối ở đây chứ không âm thầm cho qua: nhóm có chốt
+   * riêng theo `kind`, và cho đi vòng qua đường DM là vô hiệu hoá nó.
+   */
+  async nguoiNhanDm(conversationId: string): Promise<{ conversationId: string; zaloUid: string; displayName?: string; role: string }> {
+    // Lấy ĐÍCH DANH chứ không duyệt danh sách: `GET /conversations` bị engine lọc
+    // theo quyền người gọi và trả rỗng cho `agent-api`, còn lấy theo id thì không.
+    let c: Record<string, unknown>;
+    try {
+      const j = await this.goiEngine<Record<string, unknown>>(`/api/zalo-multi/conversations/${encodeURIComponent(conversationId)}`);
+      c = (j.data as Record<string, unknown>) ?? j;
+    } catch {
+      throw new BadRequestException(LY_DO_CHAN.khongThayHoiThoai);
+    }
+    if (!c?.id) throw new BadRequestException(LY_DO_CHAN.khongThayHoiThoai);
+    if (String(c.threadType ?? '') !== 'user') throw new BadRequestException(LY_DO_CHAN.khongPhaiDm);
+
+    const contact = (c.contact ?? {}) as { fullName?: string; zaloUid?: string };
+    const uid = String(contact.zaloUid ?? c.externalThreadId ?? '');
+    if (!uid) throw new BadRequestException(LY_DO_CHAN.khongThayHoiThoai);
+
+    const { chuTich } = await this.tapUidKichHoat();
+    const kinds = await this.kindTheoUid([uid]);
+
+    return {
+      conversationId,
+      zaloUid: uid,
+      // Hội thoại 1-1 để trống `title`; tên người nằm ở bản ghi contact.
+      displayName: contact.fullName || (c.title as string) || undefined,
+      role: suyVai(uid, chuTich, kinds),
+    };
+  }
+
+  /** Tin của MỘT hội thoại riêng, sau khi đã qua chốt người nhận. */
+  async tinCuaDm(conversationId: string, limit = 50, since?: string): Promise<AgentZaloMessage[]> {
+    const nguoi = await this.nguoiNhanDm(conversationId);
+    const chan = kiemNguoiNhanDm(nguoi.role);
+    if (!chan.ok) throw new BadRequestException(chan.lyDo);
+
+    const j = await this.goiEngine<{ data?: TinThoEngine[] }>(
+      `/api/zalo-multi/conversations/${encodeURIComponent(conversationId)}/messages?limit=${limit}`,
+    );
+    const mocSince = since ? new Date(since).getTime() : 0;
+    const tho = (j.data ?? []).filter((m) => !m.isDeleted && (!mocSince || new Date(m.sentAt).getTime() > mocSince));
+
+    // Hội thoại riêng không thuộc nhóm nào, nên `kind` báo thẳng là `dm` thay vì
+    // mượn một giá trị của nhóm — agent phải phân biệt được hai ngữ cảnh.
+    return this.ganVai(tho, { groupGlobalId: '', kind: 'dm', title: nguoi.displayName });
+  }
+
 
   /**
    * Tin của một nhóm, gộp từ MỌI hội thoại của nhóm đó và sắp theo thời gian.

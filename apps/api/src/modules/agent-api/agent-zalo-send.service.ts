@@ -6,7 +6,8 @@ import { Connection } from 'mongoose';
 
 import { ApiConfigService } from '@/shared/services/api-config.service';
 
-import { chonHoiThoai, kiemNoiDung, type NhomDeGui, nickRotKetNoi } from './agent-zalo-send.logic';
+import { AgentZaloReadService } from './agent-zalo-read.service';
+import { chonHoiThoai, kiemNguoiNhanDm, kiemNoiDung, type NhomDeGui, nickRotKetNoi } from './agent-zalo-send.logic';
 
 /** Engine từ chối token quá cũ; 15 giây là dư cho một lời gọi nội bộ. */
 const HAN_GIAY = 15;
@@ -33,6 +34,7 @@ export class AgentZaloSendService {
   constructor(
     @InjectConnection() private readonly connection: Connection,
     private readonly config: ApiConfigService,
+    private readonly read: AgentZaloReadService,
   ) {}
 
   async guiTinNhom(groupGlobalId: string, content: string, conversationId?: string): Promise<{ conversationId: string; groupTitle?: string; sentAt: string }> {
@@ -95,4 +97,61 @@ export class AgentZaloSendService {
       chon.ungVien.length > 1 ? 'Mọi nick của công ty trong nhóm này đều đang mất kết nối Zalo.' : loiCuoi || 'Engine Zalo từ chối.',
     );
   }
+  /**
+   * Gửi tin NHẮN RIÊNG.
+   *
+   * Chốt chặn khác hẳn đường nhóm và phải khác: nhóm có `kind` do người vận hành
+   * xét, DM thì không có gì tương đương — thứ duy nhất đứng giữa agent và một
+   * người lạ là bảng danh tính. Vì thế MẶC ĐỊNH CẤM: chỉ `chairman`/`staff` mới
+   * nhận được, còn `unknown` bị chặn y như `customer`. Đo 12/09: 53/61 người
+   * đang có hội thoại riêng với nick công ty chưa ai xét là ai.
+   *
+   * Không thử nhiều nick như đường nhóm: hội thoại riêng chỉ có đúng một nick
+   * công ty ở đầu bên này, không có đường lui nào để thử.
+   */
+  async guiTinRieng(conversationId: string, content: string): Promise<{ conversationId: string; recipient: { displayName?: string; role: string }; sentAt: string }> {
+    const { url, secret } = this.config.zaloEngine;
+    if (!url || !secret) throw new ServiceUnavailableException('Chưa cấu hình engine Zalo.');
+
+    const noiDung = kiemNoiDung(content);
+    if (!noiDung.ok) throw new BadRequestException(noiDung.lyDo);
+
+    const nguoi = await this.read.nguoiNhanDm(conversationId);
+    const chan = kiemNguoiNhanDm(nguoi.role);
+    if (!chan.ok) throw new BadRequestException(chan.lyDo);
+
+    const ts = String(Date.now());
+    const sig = createHmac('sha256', secret).update(ts).digest('base64url');
+
+    let res: Response;
+    try {
+      res = await fetch(`${url}/api/zalo-multi/conversations/${encodeURIComponent(conversationId)}/messages`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-service-token': `${ts}.${sig}`,
+          'x-user-id': 'agent-api',
+          'x-user-name': 'Agent',
+          'x-user-role': 'owner',
+          'x-user-scopes': '[]',
+        },
+        body: JSON.stringify({ content: noiDung.content }),
+        signal: AbortSignal.timeout(HAN_GIAY * 1000),
+      });
+    } catch (e) {
+      throw new ServiceUnavailableException(`Không gọi được engine Zalo: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    if (!res.ok) {
+      const raw = await res.text().catch(() => '');
+      this.logger.error(`[agent-zalo-send] DM ${conversationId} — engine trả ${res.status}: ${raw.slice(0, 300)}`);
+      throw new ServiceUnavailableException(`Engine Zalo từ chối (${res.status}).`);
+    }
+
+    // Trả lại NGƯỜI NHẬN để agent đối chiếu mình vừa nhắn cho ai — uid không dùng
+    // để định danh được (phụ thuộc nick đang nhìn), nên vai + tên là thứ duy nhất
+    // agent kiểm lại được.
+    return { conversationId, recipient: { displayName: nguoi.displayName, role: nguoi.role }, sentAt: new Date().toISOString() };
+  }
+
 }

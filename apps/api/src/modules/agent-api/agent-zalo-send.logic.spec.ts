@@ -1,6 +1,6 @@
 import { ZaloGroupKind } from 'shared';
 
-import { chonHoiThoai, kiemNoiDung, LY_DO_CHAN, nickRotKetNoi } from './agent-zalo-send.logic';
+import { chonHoiThoai, kiemNguoiNhanDm, kiemNoiDung, LY_DO_CHAN, nickRotKetNoi } from './agent-zalo-send.logic';
 
 /**
  * Đây là chốt chặn duy nhất giữa một agent và khách hàng của công ty. Mọi
@@ -73,5 +73,27 @@ describe('nickRotKetNoi — khi nào được thử nick tiếp theo', () => {
   it('KHÔNG thử lại với lỗi khác — tin có thể đã đi rồi mới hỏng, thử tiếp là nhắn hai lần', () => {
     expect(nickRotKetNoi('{"error":"internal_error"}')).toBe(false);
     expect(nickRotKetNoi('')).toBe(false);
+  });
+});
+
+describe('kiemNguoiNhanDm — ai được nhận tin RIÊNG từ agent', () => {
+  it('cho chủ tịch và nhân viên', () => {
+    expect(kiemNguoiNhanDm('chairman').ok).toBe(true);
+    expect(kiemNguoiNhanDm('staff').ok).toBe(true);
+  });
+
+  it('CẤM khách hàng', () => {
+    expect(kiemNguoiNhanDm('customer')).toEqual({ ok: false, lyDo: LY_DO_CHAN.dmKhach });
+  });
+
+  it('CẤM cả người chưa xét — "chưa ai xét" khác "đã xét và thấy an toàn"', () => {
+    // 53/61 người đang có hội thoại riêng rơi vào diện này (đo prod 12/09).
+    // Mặc định cho phép ở đây là agent nhắn riêng cho 53 người không rõ là ai.
+    expect(kiemNguoiNhanDm('unknown').ok).toBe(false);
+    expect(kiemNguoiNhanDm(undefined).ok).toBe(false);
+  });
+
+  it('CẤM nick AI khác — hai con máy nói chuyện với nhau thì không ai dừng', () => {
+    expect(kiemNguoiNhanDm('ai-support').ok).toBe(false);
   });
 });

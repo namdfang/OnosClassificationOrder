@@ -20,6 +20,21 @@ import { ZaloGroupKind } from 'shared';
  */
 export const NHOM_DUOC_GUI: readonly string[] = [ZaloGroupKind.Internal, ZaloGroupKind.Operation];
 
+/**
+ * Vai được phép nhận tin nhắn RIÊNG từ agent.
+ *
+ * Danh sách TRẮNG, và cố ý ngắn. Nhóm còn có `kind` do người vận hành xét làm
+ * chốt; DM thì không có gì tương đương — chốt duy nhất là danh tính người nhận.
+ * Đo 12/09 trên prod: trong 61 người đang có hội thoại riêng với các nick công
+ * ty, chỉ **7** đã được xét (4 chủ tịch + 3 nhân viên); 53 người còn lại chưa ai
+ * xác nhận là ai. Cho phép theo kiểu "chưa thấy cấm thì gửi" nghĩa là agent nhắn
+ * riêng cho 53 người mà không ai biết họ là khách hay người lạ.
+ *
+ * `ai-support` KHÔNG có trong danh sách: nhắn riêng cho một nick AI khác chỉ tạo
+ * ra hai con máy nói chuyện với nhau.
+ */
+export const VAI_DUOC_DM: readonly string[] = ['chairman', 'staff'];
+
 export const LY_DO_CHAN = {
   khongThayNhom: 'Không tìm thấy nhóm Zalo với mã này.',
   nhomKhach: 'CẤM gửi vào nhóm khách hàng — đường này chỉ dành cho nhóm nội bộ và nhóm vận hành.',
@@ -27,6 +42,11 @@ export const LY_DO_CHAN = {
   khongCoHoiThoai: 'Nhóm chưa có hội thoại nào để gửi (chưa nick nào của công ty ở trong nhóm).',
   hoiThoaiLac: 'conversationId không thuộc nhóm này.',
   rong: 'Nội dung rỗng.',
+  khongThayHoiThoai: 'Không tìm thấy hội thoại với mã này.',
+  khongPhaiDm: 'Đây là hội thoại NHÓM — gửi nhóm phải truyền groupGlobalId để đi qua chốt phân loại nhóm.',
+  dmKhach: 'CẤM nhắn riêng cho khách hàng.',
+  dmChuaXet: 'Chưa xác định người này là ai — phải xét ở màn Danh tính trước khi agent nhắn riêng.',
+  thieuDich: 'Phải cho biết gửi đi đâu: groupGlobalId (nhóm) hoặc conversationId (nhắn riêng).',
 } as const;
 
 export interface NhomDeGui {
@@ -64,6 +84,20 @@ export function chonHoiThoai(nhom: NhomDeGui | null, conversationId?: string): K
   }
 
   return { ok: true, ungVien: [...ds] };
+}
+
+/**
+ * Người này có được nhận tin riêng từ agent không.
+ *
+ * MẶC ĐỊNH CẤM: vai không nằm trong danh sách trắng thì chặn, kể cả `unknown`.
+ * `unknown` nghĩa là *chưa ai xét*, không phải *đã xét và thấy an toàn* — đối xử
+ * với hai thứ đó như nhau là bỏ luôn ý nghĩa của việc xét.
+ */
+export function kiemNguoiNhanDm(vai: string | undefined): { ok: true } | { ok: false; lyDo: string } {
+  if (vai && VAI_DUOC_DM.includes(vai)) return { ok: true };
+  if (vai === 'customer') return { ok: false, lyDo: LY_DO_CHAN.dmKhach };
+
+  return { ok: false, lyDo: LY_DO_CHAN.dmChuaXet };
 }
 
 /** Cắt và kiểm nội dung trước khi gửi. */

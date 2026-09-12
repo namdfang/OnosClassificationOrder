@@ -344,10 +344,20 @@ export class AgentApiController {
     const startedAt = Date.now();
     this.log('POST', '/agent/zalo/send');
     try {
-      const data = await this.zaloSend.guiTinNhom(dto.groupGlobalId, dto.content, dto.conversationId);
+      // Chế độ chọn bằng sự có mặt của `groupGlobalId`, không bằng suy đoán:
+      // hai đường có HAI chốt chặn khác nhau (phân loại nhóm vs vai người nhận).
+      const data = dto.groupGlobalId
+        ? await this.zaloSend.guiTinNhom(dto.groupGlobalId, dto.content, dto.conversationId)
+        : await this.zaloSend.guiTinRieng(dto.conversationId as string, dto.content);
       this.audit.write({
         capability: 'zalo_send',
-        queryDigest: { groupGlobalId: dto.groupGlobalId, conversationId: data.conversationId, content: dto.content.slice(0, DIGEST_MAX) },
+        queryDigest: {
+          groupGlobalId: dto.groupGlobalId,
+          conversationId: data.conversationId,
+          // Ghi vết ai nhận: đường DM không có tên nhóm để tra ngược sau này.
+          recipient: 'recipient' in data ? data.recipient : undefined,
+          content: dto.content.slice(0, DIGEST_MAX),
+        },
         returned: 1,
         durationMs: Date.now() - startedAt,
         outcome: 'ok',
@@ -389,6 +399,35 @@ export class AgentApiController {
     this.audit.write({
       capability: 'zalo_read',
       queryDigest: { groupGlobalId, limit: q.limit, since: q.since },
+      returned: data.length,
+      durationMs: Date.now() - startedAt,
+      outcome: 'ok',
+    });
+
+    return { success: true, data, total: data.length };
+  }
+
+  /**
+   * ĐỌC tin của một hội thoại RIÊNG.
+   *
+   * Cùng chốt với đường gửi riêng — mặc định cấm, chỉ `chairman`/`staff`. Đọc
+   * trộm tin riêng của một người chưa ai xác định là ai còn khó biện minh hơn
+   * nhắn nhầm cho họ: nhắn nhầm thì người ta thấy, đọc thì không.
+   */
+  @Get('zalo/dm/:conversationId/messages')
+  @Auth([], [], { public: true })
+  @ApiOperation({ summary: 'Đọc tin của một hội thoại riêng (chỉ nhân viên/chủ tịch)' })
+  @HttpCode(HttpStatus.OK)
+  async zaloDmMessages(
+    @Param('conversationId') conversationId: string,
+    @Query() q: GetAgentZaloMessagesDto,
+  ): Promise<GetAgentZaloMessagesResDto> {
+    const startedAt = Date.now();
+    this.log('GET', `/agent/zalo/dm/${conversationId}/messages`);
+    const data = await this.zaloRead.tinCuaDm(conversationId, q.limit ?? 50, q.since);
+    this.audit.write({
+      capability: 'zalo_read',
+      queryDigest: { conversationId, limit: q.limit, since: q.since, dm: true },
       returned: data.length,
       durationMs: Date.now() - startedAt,
       outcome: 'ok',
