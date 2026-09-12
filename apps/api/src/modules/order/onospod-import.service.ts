@@ -1,10 +1,12 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import axios from 'axios';
-import type { DesignFields, ImportFromOnosPodDto, ImportFromOnosPodResDto } from 'shared';
+import type { DesignFields, ImportFromOnosPodDto, ImportFromOnosPodResDto, OnospodHoldSyncResult } from 'shared';
 
 import { ApiConfigService } from '@/shared/services';
 
 import type { AuditContext } from '../order-log/order-log.service';
+import { OnospodHoldSyncService } from './onospod-hold-sync.service';
+import type { OnospodQcConfig } from './onospod-qc.client';
+import { fetchMrpProductPage } from './onospod-qc.client';
 import { OrderService } from './order.service';
 
 const TZ_OFFSET_MINUTES = 7 * 60;
@@ -509,6 +511,7 @@ export class OnospodImportService {
   constructor(
     private readonly apiConfigService: ApiConfigService,
     private readonly orderService: OrderService,
+    private readonly onospodHoldSyncService: OnospodHoldSyncService,
   ) {}
 
   async importFromOnosPod(dto: ImportFromOnosPodDto, ctx?: AuditContext): Promise<ImportFromOnosPodResDto> {
@@ -550,6 +553,7 @@ export class OnospodImportService {
           duplicatesInBatch: 0,
           period: { start: start.toISOString(), end: end.toISOString() },
           byManufacture: [],
+          holdSync: await this.runHoldSync(ctx),
         },
       };
     }
@@ -572,6 +576,7 @@ export class OnospodImportService {
         duplicatesInBatch,
         period: { start: start.toISOString(), end: end.toISOString() },
         byManufacture,
+        holdSync: await this.runHoldSync(ctx),
       },
     };
   }
@@ -671,60 +676,46 @@ export class OnospodImportService {
 
   // Không truyền `manufacture_id` → OnosPod trả đơn từ TẤT CẢ manufacture
   // (xem comment ở `importFromOnosPod()`).
+  // HTTP/GraphQL dùng chung `fetchMrpProductPage()` (onospod-qc.client.ts) với
+  // đồng bộ giữ đơn — hành vi + message lỗi giữ nguyên bản cũ.
   private async fetchPage(
-    config: { apiUrl: string; bearerToken: string },
+    config: OnospodQcConfig,
     status: string,
     start: Date,
     end: Date,
     page: number,
     setTotalPages: (totalPages: number) => void,
   ): Promise<MrpProductItem[]> {
-    let res;
+    const result = await fetchMrpProductPage<MrpProductItem>(
+      config,
+      {
+        operationName: 'PaginateMrpProduct',
+        variables: {
+          page_size: PAGE_SIZE,
+          page,
+          status,
+          start: start.toISOString(),
+          end: end.toISOString(),
+        },
+        query: PAGINATE_QUERY,
+      },
+      page,
+    );
+
+    setTotalPages(result.paginate.total_pages || 1);
+    return result.items;
+  }
+
+  /**
+   * Đồng bộ giữ đơn theo OnosPod chạy ở CUỐI mỗi lượt import (nút + cron import).
+   * Bọc try/catch: lỗi đồng bộ KHÔNG được làm hỏng kết quả import đã ghi xong.
+   */
+  private async runHoldSync(ctx?: AuditContext): Promise<OnospodHoldSyncResult | undefined> {
     try {
-      res = await axios.post(
-        config.apiUrl,
-        {
-          operationName: 'PaginateMrpProduct',
-          variables: {
-            page_size: PAGE_SIZE,
-            page,
-            status,
-            start: start.toISOString(),
-            end: end.toISOString(),
-          },
-          query: PAGINATE_QUERY,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${config.bearerToken}`,
-            'Content-Type': 'application/json',
-            // Gateway OnosPod (qc.onospod.com lẫn api.onospod.com) chặn 403 nếu
-            // THIẾU header `origin` — verify bằng test gọi thật 2026-07-23, xem
-            // comment `ONOSPOD_ORIGIN` ở `onospod-order-lookup.service.ts`.
-            // KHÔNG liên quan token/password dù message dễ gây nhầm.
-            Origin: 'https://qc.onospod.com',
-            Referer: 'https://qc.onospod.com/',
-          },
-          timeout: 30_000,
-        },
-      );
+      return await this.onospodHoldSyncService.sync({ ip: ctx?.ip, trigger: 'import' });
     } catch (err) {
-      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-      const message = axios.isAxiosError(err) ? err.message : 'Unknown error';
-      throw new BadRequestException(`Gọi OnosPod (page ${page}) thất bại: ${message}${status ? ` (HTTP ${status})` : ''}`);
+      console.warn('[onospod-hold-sync] chạy sau import thất bại:', err instanceof Error ? err.message : err);
+      return undefined;
     }
-
-    const gqlErrors = res.data?.errors;
-    if (Array.isArray(gqlErrors) && gqlErrors.length > 0) {
-      throw new BadRequestException(`OnosPod trả lỗi: ${gqlErrors.map((e: { message?: string }) => e.message).join('; ')}`);
-    }
-
-    const result = res.data?.data?.paginateMrpProduct;
-    if (!result) {
-      throw new BadRequestException(`OnosPod không trả dữ liệu (page ${page}).`);
-    }
-
-    setTotalPages(result.paginate?.total_pages || 1);
-    return result.items || [];
   }
 }
