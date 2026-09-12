@@ -88,7 +88,11 @@ if (val('--agent-nick')) {
 
 if (val('--subscriber')) {
   const url = val('--subscriber');
-  const secret = val('--subscriber-secret');
+  // Ưu tiên đọc từ file: bí mật đặt thẳng trên dòng lệnh thì lộ trong `ps` và
+  // nằm lại trong lịch sử shell của mọi người từng chạy.
+  const secret = val('--subscriber-secret-file')
+    ? readFileSync(val('--subscriber-secret-file'), 'utf8').trim()
+    : val('--subscriber-secret');
   const ds = (moi.subscribers ?? []).filter((s) => s.url !== url);
   ds.push({ url, secret, enabled: true, description: val('--subscriber-note') });
   moi.subscribers = ds;
