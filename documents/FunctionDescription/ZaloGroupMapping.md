@@ -46,6 +46,27 @@ Ba chỗ phải xử lý riêng:
 
 Hai script đồng bộ nay mặc định đọc **`onosnew`** (`--ssh/--container/--db` để trỏ nơi khác).
 
+### Nhãn hội thoại của engine — chuyển nốt 12/09/2026
+
+Đợt chuyển 11/09 mang hội thoại và tin nhắn, nhưng **bỏ sót nhãn**: engine mới có
+0 nhãn trong khi máy cũ giữ 14 định nghĩa và 142 lượt gắn do ops làm tay. Đã chép
+đủ **142/142**.
+
+Bảy nhãn thật (mỗi nick một bộ, nên 14 dòng): `KHACH` · `NOIBO` · `NOIBO_HEP` ·
+`NCC` · `KYTHUAT` · `CHUA` · `CHUTICH`.
+
+Cách chép: bật **CHỈ container DB** của máy cũ — bật cả engine là nó khôi phục
+phiên Zalo và đá hết nick đang chạy trên máy mới. Ánh xạ nick qua `zalo_uid` và
+hội thoại qua `(zalo_uid, external_thread_id)`; id nội bộ hai engine khác nhau
+nên không dùng được. Giữ nguyên UUID của nhãn + `ON CONFLICT DO NOTHING` để chạy
+lại không sinh trùng (đã kiểm: chạy hai lần vẫn 142).
+
+**Nhãn cũ là dữ liệu ops đã xét, nên nó soi ra chỗ lệch với `kind` hiện tại.** Đối
+chiếu 114 nhóm có nhãn: **19 nhóm mang nhãn `KHACH` mà `kind` vẫn là `unreviewed`**,
+cộng 1 `NCC` và 2 `CHUA` cùng tình trạng. Chưa tự động áp — `kind` là quyết định
+của người xét (xem kỷ luật gợi-ý-rồi-duyệt ở mục danh tính), nhãn cũ chỉ là gợi ý
+mạnh để ops xử nốt danh sách chờ.
+
 ## Nối nhóm ↔ khách: gợi ý theo khuôn tên + tạo khách ngay tại màn nối (11/09/2026)
 
 Mục tiêu: biến trang này thành **source of truth** cho quan hệ nhóm Zalo ↔ khách, thay vì chỉ nối được tới những khách do đơn hàng sinh ra.
