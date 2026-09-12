@@ -53,3 +53,20 @@ Có sàn tuyệt đối vì chỉ nhìn phần trăm thì khách 2 đơn còn 1 
 ## Kỷ luật riêng của báo cáo này
 
 Đây là **báo cáo nội bộ**, mang số đơn của từng khách. **Tuyệt đối không đọc số của khách này cho khách khác nghe** — kể cả khi họ hỏi "bên kia đặt bao nhiêu". Xem `WhatYouCannotSee.md`.
+
+## Kỳ THÁNG
+
+`kind: "month"`, `periodKey` dạng `2026-08-01_2026-08-31` — đọc qua đúng endpoint
+cũ, không có hợp đồng riêng.
+
+**Ranh giới là nửa đêm GIỜ VIỆT NAM** (UTC+7), không phải UTC. Cùng mốc với CEO
+Dashboard, nên số tháng khớp bảng lãnh đạo. Tháng 28/29/30/31 ngày đều đúng.
+
+Sinh tự động sáng **mùng 1** cho tháng vừa khép lại. Tháng đang chạy KHÔNG có báo
+cáo — nó chưa khép nên số sẽ đổi mỗi ngày.
+
+⚠️ **Chỉ có từ tháng 6/2026 trở đi.** OnosFactory bắt đầu chạy thật từ 06/2026;
+trước đó đơn nằm ở hệ cũ OnosPod và **không** có trong hệ này. Tháng 1→5/2026 cố
+ý KHÔNG có báo cáo — đó là "hệ thống chưa có dữ liệu kỳ này", KHÔNG phải "công ty
+không sản xuất gì". Nếu ai hỏi bảng T1→T8, hãy nói rõ điều đó thay vì điền 0 vào
+năm dòng đầu: bảng mở đầu bằng năm tháng 0 trông y hệt một cú sụp sản lượng.
