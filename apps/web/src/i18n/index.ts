@@ -16,6 +16,7 @@ import customersEn from './locales/en/customers.json';
 import dashboardEn from './locales/en/dashboard.json';
 import designerAutoAssignEn from './locales/en/designerAutoAssign.json';
 import designerTaskWorkflowEn from './locales/en/designerTaskWorkflow.json';
+import dtfGuideEn from './locales/en/dtfGuide.json';
 import fulfillmentWorkflowEn from './locales/en/fulfillmentWorkflow.json';
 import landingEn from './locales/en/landing.json';
 import layoutEn from './locales/en/layout.json';
@@ -49,6 +50,7 @@ import customersVi from './locales/vi/customers.json';
 import dashboardVi from './locales/vi/dashboard.json';
 import designerAutoAssignVi from './locales/vi/designerAutoAssign.json';
 import designerTaskWorkflowVi from './locales/vi/designerTaskWorkflow.json';
+import dtfGuideVi from './locales/vi/dtfGuide.json';
 import fulfillmentWorkflowVi from './locales/vi/fulfillmentWorkflow.json';
 import landingVi from './locales/vi/landing.json';
 import layoutVi from './locales/vi/layout.json';
@@ -124,6 +126,7 @@ export const resources = {
     agentApi: agentApiVi,
     ceoDashboard: ceoDashboardVi,
     apiDocs: apiDocsVi,
+    dtfGuide: dtfGuideVi,
   },
   en: {
     common: commonEn,
@@ -159,6 +162,7 @@ export const resources = {
     agentApi: agentApiEn,
     ceoDashboard: ceoDashboardEn,
     apiDocs: apiDocsEn,
+    dtfGuide: dtfGuideEn,
   },
 } as const;
 

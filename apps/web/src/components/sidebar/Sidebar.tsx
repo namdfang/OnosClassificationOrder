@@ -7,6 +7,7 @@ import {
   BarChart3,
   Barcode,
   Bell,
+  BookOpen,
   Briefcase,
   Building2,
   ChevronDown,
@@ -403,6 +404,15 @@ function buildProductionItems(t: TFunction<'layout'>, factoryId?: string, keyPre
           perm: 'page.fulfillment_my_tasks',
         },
       ],
+    },
+    {
+      // Hướng dẫn quy trình DTF theo vai (DtfRoleGuide.md) — trang tĩnh, nội dung không phụ thuộc xưởng; link vẫn
+      // mang `?factoryId=` như cả cụm để quay lại trang khác không mất phạm vi xưởng đang chọn.
+      key: k(PATHS.DTF_GUIDE),
+      label: t('sidebar.guideDtf'),
+      to: to(PATHS.DTF_GUIDE),
+      icon: <BookOpen size={17} />,
+      perm: 'page.guide_dtf',
     },
   ];
   // `scopeOnly` (07/09/2026): cụm sản xuất CHUNG chỉ MANG THEO `?factoryId=` đang chọn ở bộ chọn
