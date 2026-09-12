@@ -1933,6 +1933,7 @@ Response mẫu (`SetDesignReviewResultResDto` — `data` = `ProductionOrderZod` 
 | Không xác định xưởng | `pages/orders/unmapped/index.tsx` | inline — reset `search`/`selected`/`page` |
 | Task Fulfillment | `pages/fulfillment/my-tasks/index.tsx` (`FulfillmentKanbanView`) | inline — reset `search`/`filters`/`dateFrom`/`dateTo`/`selected` (`dayFilter` tự clear qua effect có sẵn khi đổi ngày) |
 | Task của tôi | `pages/designer/my-tasks/index.tsx` | inline — reset `search`/`filters`/`dateFrom`/`dateTo`/`selected` |
+| Hướng dẫn DTF | `pages/guide/dtf/index.tsx` | inline — bỏ `?role=` (về vai của tài khoản) + cuộn lên đầu trang (trang không có filter; xem `DtfRoleGuide.md` §2.3) |
 
 **CHƯA wire** (biết rõ, chưa làm — không phải bỏ sót):
 - **Dashboard** (7 tab `?tab=...`) — mỗi tab filter riêng nằm trong component con (`OrderStatsTab`, `OrderStatusTab`, `OrderFactoryTab`, `LifecycleTab`, `ToolCheckTab`, `PersonErrorTab`, `DesignerStatsTab`) — cần khảo sát + sửa riêng từng tab, chưa làm trong lượt này.
