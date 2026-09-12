@@ -62,10 +62,39 @@ nên không dùng được. Giữ nguyên UUID của nhãn + `ON CONFLICT DO NOT
 lại không sinh trùng (đã kiểm: chạy hai lần vẫn 142).
 
 **Nhãn cũ là dữ liệu ops đã xét, nên nó soi ra chỗ lệch với `kind` hiện tại.** Đối
-chiếu 114 nhóm có nhãn: **19 nhóm mang nhãn `KHACH` mà `kind` vẫn là `unreviewed`**,
-cộng 1 `NCC` và 2 `CHUA` cùng tình trạng. Chưa tự động áp — `kind` là quyết định
-của người xét (xem kỷ luật gợi-ý-rồi-duyệt ở mục danh tính), nhãn cũ chỉ là gợi ý
-mạnh để ops xử nốt danh sách chờ.
+chiếu 114 nhóm có nhãn: 22 nhóm có nhãn mà `kind` vẫn là `unreviewed`.
+
+Người dùng chốt áp luôn rồi tự xem lại, nên **13 nhóm đã được gắn** (12 → `seller`
+kèm khách, 1 → `operation`); `unreviewed` giảm 92 → 79. Việc này đi NGƯỢC ghi chú
+cố ý ở `getSuggestions()` ("chỉ đoán, không tự gắn — gắn tự động là sớm muộn cũng
+quy nhầm doanh thu sang khách khác, mà sai kiểu đó rất khó phát hiện"), nên mọi
+nhóm bị đụng đều mang dấu vết trong `note`:
+
+```
+zalo_group_links.note bắt đầu bằng "Phân loại chép từ nhãn engine Zalo cũ 12/09/2026"
+```
+
+Không có dấu vết thì "để tôi xem lại" là bất khả thi — không ai nhớ nổi 13 nhóm nào.
+
+**Bản đồ nhãn → `kind`:** `KHACH`→seller · `NOIBO`/`NOIBO_HEP`/`CHUTICH`→internal ·
+`NCC`/`KYTHUAT`→operation. `CHUA` cố ý KHÔNG có mặt: bên cũ nó nghĩa là *chưa xét*,
+nên không mang thông tin để áp.
+
+**9 nhóm để lại cho người xét**, vì tự động sẽ đoán bừa: 2 nhóm nhãn `CHUA`; 6 nhóm
+nhãn `KHACH` nhưng tên không theo khuôn mã seller (`BOD - Mr Khang Ecomlite`,
+`OnosEx/ Zeno boss`…) — mà `kind=seller` bị chặn nếu thiếu `customerId`; và 1 nhóm
+mã `THANHDOT06` **gần giống** `THANHDONAL06/07` đang có. Chốt chống nhầm: mã chung
+7 ký tự đầu với khách sẵn có thì không tạo khách mới — tạo khách thứ hai cho cùng
+một seller làm hỏng mọi báo cáo nối nhóm ↔ đơn.
+
+12 khách mới sinh ra từ đây mang `source='zalo-group'`, `userEmail` để trống (khớp
+đơn qua `userSku`). Đã kiểm sau khi chạy: 0 nhóm `seller` thiếu khách, 0 nhóm khác
+`seller` mà có khách.
+
+**Không bật AppModule để làm việc này.** Context đầy đủ trên prod kéo theo mailer,
+RabbitMQ và **đăng ký lại repeatable job của BullMQ** — quá xâm lấn cho một lần sửa
+dữ liệu. Script chỉ dùng hàm thuần `khopTenNhom` từ bản build, còn bất biến thì chép
+tay từ `updateLink()` sau khi đối chiếu từng dòng.
 
 ## Nối nhóm ↔ khách: gợi ý theo khuôn tên + tạo khách ngay tại màn nối (11/09/2026)
 
