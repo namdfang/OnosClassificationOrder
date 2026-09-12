@@ -6,11 +6,13 @@ import { Cron } from '@nestjs/schedule';
 import { Model } from 'mongoose';
 import type { CeoOverview, CeoReport, CeoReportKind } from 'shared';
 
+import { laTienTrinhChayCron } from '@/utils/cron-guard';
+import { laThangTron } from '@/utils/report-period';
+
 import { tachJson } from '../zalo-group/zalo-summary.logic';
 import { buildCeoChartSvg } from './ceo-chart';
 import { CeoDashboardService } from './ceo-dashboard.service';
 import { CeoReportDocument, CeoReportEntity } from './ceo-report.entity';
-import { laTienTrinhChayCron } from '@/utils/cron-guard';
 
 const TZ = 'Asia/Ho_Chi_Minh';
 const MODEL = process.env.CEO_REPORT_MODEL || process.env.ZALO_SUMMARY_MODEL || 'opus';
@@ -47,11 +49,13 @@ Trả về JSON đúng khuôn: tomTat (2–3 câu tóm tắt kỳ: làm được
 
 const kindOf = (from: string, to: string, days: number): CeoReportKind => {
   if (days === 1) return 'day';
-  // Thứ trong tuần / ngày trong tháng tính theo giờ VN: dịch mốc +7h rồi đọc bằng getUTC*.
+  // Thứ trong tuần tính theo giờ VN: dịch mốc +7h rồi đọc bằng getUTC*.
   const vnF = new Date(new Date(`${from}T00:00:00+07:00`).getTime() + 7 * 3_600_000);
-  const vnTNext = new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 7 * 3_600_000 + 864e5);
   if (days === 7 && vnF.getUTCDay() === 1) return 'week';
-  if (vnF.getUTCDate() === 1 && vnTNext.getUTCDate() === 1) return 'month';
+  // Phép nhận biết tháng dùng CHUNG với báo cáo khách hàng — hai bộ gán khác
+  // nhãn cho cùng một kỳ thì agent bày sai một trong hai.
+  if (laThangTron(from, to)) return 'month';
+
   return 'custom';
 };
 const vnDay = (d: Date) => new Date(d.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);

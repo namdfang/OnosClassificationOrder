@@ -95,9 +95,9 @@ export function vietTomTat(o: CeoOverview, tut: KhachThoRow[], tang: KhachThoRow
     `Kỳ ${o.period.from} → ${o.period.to} có ${c.active} khách đặt đơn (kỳ trước ${c.prevActive}), tổng ${o.production.in} đơn vào, ${chieu} so kỳ trước.`,
   ];
   if (c.newCount > 0) cau.push(`${c.newCount} khách mới.`);
-  if (tang.length > 0) cau.push(`${tang.length} khách tăng mạnh, dẫn đầu ${tang[0]!.userSku} (${tang[0]!.prevOrders} → ${tang[0]!.orders} đơn).`);
+  if (tang.length > 0) cau.push(`${tang.length} khách tăng mạnh, dẫn đầu ${tang[0].userSku} (${tang[0].prevOrders} → ${tang[0].orders} đơn).`);
   if (tut.length > 0) {
-    cau.push(`${tut.length} khách tụt sâu cần hỏi lại, nặng nhất ${tut[0]!.userSku} (${tut[0]!.prevOrders} → ${tut[0]!.orders} đơn).`);
+    cau.push(`${tut.length} khách tụt sâu cần hỏi lại, nặng nhất ${tut[0].userSku} (${tut[0].prevOrders} → ${tut[0].orders} đơn).`);
   } else {
     cau.push('Không có khách nào tụt sâu.');
   }
