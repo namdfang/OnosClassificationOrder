@@ -143,13 +143,32 @@ export class CustomerReportService implements OnModuleInit {
       { ten: 'customer', col: 'customer_reports', sinh: (f, t) => this.generate(f, t, 'cron') },
     ];
 
+    // Tháng KHÔNG có đơn nào thì KHÔNG sinh báo cáo.
+    //
+    // OnosFactory mới chạy thật từ 06/2026; trước đó đơn nằm ở hệ cũ OnosPod.
+    // Sinh báo cáo cho tháng 1–5 ra một bản toàn số 0, và một bảng T1→T8 với
+    // năm dòng 0 đầu trông y hệt một cú sụp sản lượng. Không có báo cáo là
+    // trung thực ("kỳ này hệ thống chưa có dữ liệu"); báo cáo rỗng thì không.
+    const coDon = new Map<string, boolean>();
+    for (const { from, to } of thangs) {
+      const n = await this.connection.collection('orders').countDocuments(
+        { inProductionAt: { $gte: new Date(`${from}T00:00:00+07:00`), $lt: new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 864e5) } },
+        { limit: 1 },
+      );
+      coDon.set(`${from}_${to}`, n > 0);
+    }
+
     const thieu: Array<{ b: (typeof bo)[number]; from: string; to: string }> = [];
     for (const b of bo) {
       for (const { from, to } of thangs) {
+        if (!coDon.get(`${from}_${to}`)) continue;
         const co = await this.connection.collection(b.col).findOne({ periodKey: `${from}_${to}` }, { projection: { _id: 1 } });
         if (!co) thieu.push({ b, from, to });
       }
     }
+
+    const bo0 = [...coDon.entries()].filter(([, v]) => !v).map(([k]) => k.slice(0, 7));
+    if (bo0.length > 0) this.logger.log(`[bu-thang] bỏ qua ${bo0.length} tháng chưa có đơn nào: ${bo0.join(', ')}`);
     if (thieu.length === 0) return;
 
     const db = this.connection.db;
