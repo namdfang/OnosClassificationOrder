@@ -335,6 +335,13 @@ xong. Cùng lý do, tin bị loại trả `200` — "không đáng đánh thức
 thô** để kiểm chữ ký nên được thêm vào hook `preParsing` ở `main-nest.ts` cạnh
 `/api/v1/partner`.
 
+⚠️ **Sửa blob cấu hình thẳng trong Mongo thì PHẢI xoá cache Redis.**
+`SystemConfigService.get()` cache blob **1 tiếng**; đường `set()` tự dọn, còn script
+ghi thẳng collection thì không. Triệu chứng khi quên: đăng ký bên nhận xong, sự
+kiện vẫn vào kho bình thường nhưng **không được đẩy đi, và không có lỗi nào** —
+vì lúc đọc, danh sách bên nhận vẫn rỗng. `setup-zalo-inbound.mjs` đã tự xoá
+`system_config:agent_zalo_inbound_config` sau mỗi lần ghi.
+
 `ZaloIdentityKind` thêm `Chairman`: đánh dấu Chủ tịch là việc của người vận hành ở
 màn *Danh tính*, không phải hằng số trong mã — và phải đánh dấu **đủ mọi dòng** của
 ông vì lý do uid ở trên.
