@@ -40,6 +40,34 @@ nick Zalo rớt kết nối (bị đá, chờ quét lại QR) là chuyện thư�
 truyền id lạc sẽ bị từ chối, vì nếu không thì chỉ cần biết một id hội thoại bất
 kỳ là nhắn được vào nhóm khách, và toàn bộ chốt chặn dưới đây thành vô nghĩa.
 
+## 1b. Nhắn riêng (DM)
+
+Bỏ `groupGlobalId`, đưa `conversationId` của hội thoại 1-1:
+
+```json
+{ "conversationId": "284fc13b-…", "content": "Báo cáo hôm nay: …" }
+```
+
+Trả về có thêm **người nhận**, để bạn đối chiếu mình vừa nhắn cho ai:
+
+```json
+{ "success": true, "data": {
+  "conversationId": "284fc13b-…",
+  "recipient": { "displayName": "Thuy Thanh", "role": "staff" },
+  "sentAt": "2026-09-12T04:23:15.599Z" } }
+```
+
+**Chỉ nhắn riêng được cho `chairman` và `staff`.** Không phải chỉ cấm khách:
+**người chưa ai xét cũng bị cấm**. `unknown` nghĩa là *chưa ai kiểm*, không phải
+*đã kiểm và thấy an toàn* — và hiện 53 trong 61 người có hội thoại riêng với nick
+công ty đang ở diện đó. Muốn mở cho ai thì nhờ vận hành xét người đó ở màn *Danh
+tính* trước.
+
+Nick trợ lý AI khác cũng bị cấm: hai con máy nhắn nhau thì không có ai dừng lại.
+
+Đưa id hội thoại NHÓM vào đường này sẽ bị từ chối — gửi nhóm phải đi qua
+`groupGlobalId` để còn qua chốt phân loại nhóm.
+
 ## 2. Nhóm nào được gửi
 
 | `kind` | Gửi được? | Là nhóm gì |

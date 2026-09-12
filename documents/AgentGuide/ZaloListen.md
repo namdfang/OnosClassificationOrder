@@ -85,6 +85,19 @@ không thì hai trợ lý nói chuyện với nhau trong nhóm cho tới khi có
 *người ngoài*. Đừng suy ra điều gì từ nó, và đừng nói năng như thể đã biết người
 đó là ai.
 
+## 3b. Đọc hội thoại riêng
+
+```
+GET /api/v1/agent/zalo/dm/{conversationId}/messages?limit=50&since=<ISO>
+```
+
+Cùng hình dạng tin như trên, `kind` trả `"dm"` và `groupGlobalId` rỗng — hai ngữ
+cảnh khác nhau, đừng trộn.
+
+Cùng chốt với đường nhắn riêng: **chỉ `chairman`/`staff`**, người chưa xét cũng bị
+cấm. Đọc trộm tin riêng của người chưa ai xác định là ai còn khó biện minh hơn
+nhắn nhầm cho họ — nhắn nhầm thì người ta thấy, đọc thì không.
+
 ## 4. Nhóm nào đọc được
 
 Đúng bộ luật của [ZaloSend.md](ZaloSend.md): **chỉ `internal` và `operation`**.

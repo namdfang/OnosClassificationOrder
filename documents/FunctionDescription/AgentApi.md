@@ -79,6 +79,7 @@ Guard chạy **trước** mọi validate tham số. Nếu làm ngược lại, m
 | **`POST`** | **`/v1/agent/zalo/send`** | **GHI — gửi tin vào nhóm Zalo nội bộ/vận hành. Xem §3.3** |
 | `GET` | `/v1/agent/zalo/groups/:groupGlobalId/messages` | Đọc tin của một nhóm nội bộ/vận hành. Xem §3.4 |
 | `GET` | `/v1/agent/zalo/inbox` | Sự kiện đã lọc, từ một con trỏ. Xem §3.4 |
+| `GET` | `/v1/agent/zalo/dm/:conversationId/messages` | Đọc hội thoại riêng. Chốt theo VAI người kia — §3.5 |
 | `GET` | `/v1/agent/docs` | Danh mục tài liệu nghiệp vụ |
 | `GET` | `/v1/agent/docs/:slug` | Nội dung markdown của một tài liệu |
 
@@ -345,6 +346,32 @@ vì lúc đọc, danh sách bên nhận vẫn rỗng. `setup-zalo-inbound.mjs` �
 `ZaloIdentityKind` thêm `Chairman`: đánh dấu Chủ tịch là việc của người vận hành ở
 màn *Danh tính*, không phải hằng số trong mã — và phải đánh dấu **đủ mọi dòng** của
 ông vì lý do uid ở trên.
+
+### 3.5 Nhắn riêng (DM) — chốt chặn phải KHÁC đường nhóm
+
+Nhóm dựa vào `kind` do người vận hành xét. Hội thoại 1-1 **không có gì tương
+đương**, nên thứ duy nhất đứng giữa agent và một người lạ là bảng danh tính. Vì
+thế đường DM **mặc định CẤM** (`kiemNguoiNhanDm`): chỉ `chairman`/`staff` đi qua.
+
+`unknown` bị chặn **ngang hàng với `customer`**. Đo 12/09 trên prod: trong 61
+người đang có hội thoại riêng với nick công ty, chỉ **7** đã được xét (4 chủ tịch
++ 3 nhân viên); 31 `unknown`, 22 chưa có dòng danh tính, 1 khách. Coi "chưa ai
+xét" là an toàn nghĩa là mở 53 hội thoại riêng với người không rõ là ai — và bỏ
+luôn ý nghĩa của việc xét. `ai-support` cũng bị chặn: hai nick AI nhắn nhau thì
+không có ai dừng.
+
+**Chế độ chọn bằng SỰ CÓ MẶT của `groupGlobalId`**, không suy từ hình dạng id:
+có → đường nhóm, không → đường DM. Nếu để `conversationId` tự quyết định thì sớm
+muộn một id hội thoại thuộc nhóm đi lọt vào đường DM và bỏ qua chốt nhóm; ngược
+lại, đưa id nhóm vào đường DM bị từ chối thẳng (`threadType !== 'user'`).
+
+Đáp lại đường gửi DM có `recipient {displayName, role}` — `zaloUid` không dùng
+làm danh tính được (phụ thuộc nick đang nhìn, xem §3.4), nên vai + tên là thứ duy
+nhất agent tự kiểm lại được.
+
+Tra hội thoại bằng `GET /api/zalo-multi/conversations/:id` **đích danh**, không
+duyệt danh sách: `GET /conversations` bị engine lọc theo quyền người gọi và trả
+rỗng cho `agent-api`, còn lấy theo id thì không.
 
 ## 4. UI Components
 
